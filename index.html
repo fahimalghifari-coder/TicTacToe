@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neon Infinite Tic-Tac-Toe</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap');
 
         * {
             box-sizing: border-box;
-            /* Mencegah highlight biru saat elemen disentuh di Android */
             -webkit-tap-highlight-color: transparent; 
         }
 
@@ -24,7 +24,7 @@
             min-height: 100vh;
             margin: 0;
             overflow: hidden;
-            touch-action: manipulation; /* Mengoptimalkan respons klik di layar sentuh */
+            touch-action: manipulation;
         }
 
         /* --- KONTROL LAYAR --- */
@@ -46,7 +46,7 @@
             text-shadow: 0 0 10px #ffffff;
             margin-bottom: 20px;
             text-align: center;
-            font-size: clamp(1.5rem, 5vw, 2.5rem); /* Ukuran teks responsif */
+            font-size: clamp(1.5rem, 5vw, 2.5rem);
         }
 
         h2 {
@@ -55,7 +55,7 @@
             text-align: center;
         }
 
-        /* --- TOMBOL --- */
+        /* --- TOMBOL & INPUT --- */
         .btn-group {
             display: flex;
             gap: 15px;
@@ -77,17 +77,61 @@
             transition: all 0.3s ease;
         }
 
-        button:hover, button:active {
-            background: #fff;
-            color: #0a0a0f;
-            box-shadow: 0 0 15px #fff;
-        }
-
+        button:hover, button:active { background: #fff; color: #0a0a0f; box-shadow: 0 0 15px #fff; }
+        
         .btn-blue { border-color: #00f3ff; color: #00f3ff; }
         .btn-blue:hover, .btn-blue:active { background: #00f3ff; color: #0a0a0f; box-shadow: 0 0 15px #00f3ff; }
 
         .btn-pink { border-color: #ff00ff; color: #ff00ff; }
         .btn-pink:hover, .btn-pink:active { background: #ff00ff; color: #0a0a0f; box-shadow: 0 0 15px #ff00ff; }
+        
+        .btn-orange { border-color: #ff8c00; color: #ff8c00; }
+        .btn-orange:hover, .btn-orange:active { background: #ff8c00; color: #0a0a0f; box-shadow: 0 0 15px #ff8c00; }
+
+        input[type="text"] {
+            padding: 10px;
+            font-size: 1.2rem;
+            font-family: 'Orbitron', sans-serif;
+            text-align: center;
+            text-transform: uppercase;
+            background: #12121a;
+            color: #00f3ff;
+            border: 2px solid #00f3ff;
+            border-radius: 5px;
+            outline: none;
+            width: 200px;
+            box-shadow: inset 0 0 10px rgba(0,243,255,0.3);
+        }
+
+        .multiplayer-box {
+            background: #12121a;
+            padding: 20px;
+            border: 2px solid #333;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        #room-code-display {
+            font-size: 2rem;
+            color: #ff00ff;
+            text-shadow: 0 0 15px #ff00ff;
+            letter-spacing: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        .connection-status {
+            color: #ff8c00;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            height: 20px;
+        }
 
         /* --- MENU GAMBAR KUSTOM --- */
         .canvas-container {
@@ -98,11 +142,7 @@
             justify-content: center;
         }
 
-        .canvas-box {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
+        .canvas-box { display: flex; flex-direction: column; align-items: center; }
 
         canvas {
             background-color: #12121a;
@@ -110,13 +150,11 @@
             border-radius: 10px;
             cursor: crosshair;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
-            /* Sangat Penting untuk Android: Mencegah layar ter-scroll saat sedang menggambar */
             touch-action: none; 
         }
 
         #canvas1 { border-color: #00f3ff; box-shadow: 0 0 10px rgba(0,243,255,0.3); }
         #canvas2 { border-color: #ff00ff; box-shadow: 0 0 10px rgba(255,0,255,0.3); }
-
         .clear-btn { margin-top: 10px; font-size: 0.8rem; padding: 5px 15px; }
 
         /* --- GAME BOARD --- */
@@ -129,103 +167,81 @@
             justify-content: center;
             gap: 10px;
             text-align: center;
+            min-height: 30px;
         }
 
-        #status img {
-            height: 1.5em; 
-            vertical-align: middle;
-        }
-
+        #status img { height: 1.5em; vertical-align: middle; }
         .status-x { color: #00f3ff; text-shadow: 0 0 10px #00f3ff; }
         .status-o { color: #ff00ff; text-shadow: 0 0 10px #ff00ff; }
-
         .status-x img { filter: drop-shadow(0 0 5px #00f3ff) drop-shadow(0 0 10px #00f3ff); }
         .status-o img { filter: drop-shadow(0 0 5px #ff00ff) drop-shadow(0 0 10px #ff00ff); }
 
-        /* GRID RESPONSIVE - Otomatis menyesuaikan layar HP */
         .board {
             display: grid;
-            grid-template-columns: repeat(3, 1fr); /* Otomatis membagi layar 3 kolom rata */
-            gap: clamp(5px, 2vw, 10px); /* Jarak antar kotak responsif */
-            width: 90vw;          /* Lebar maksimal 90% dari layar HP */
-            max-width: 400px;     /* Lebar maksimal untuk layar PC/Tablet */
-            aspect-ratio: 1 / 1;  /* Menjaga bentuknya selalu persegi sempurna (Square) */
+            grid-template-columns: repeat(3, 1fr);
+            gap: clamp(5px, 2vw, 10px);
+            width: 90vw; max-width: 400px;
+            aspect-ratio: 1 / 1;
             margin-bottom: 30px;
             transition: all 0.3s ease;
         }
 
         .cell {
-            width: 100%;
-            height: 100%;
-            background-color: #12121a;
-            border: 2px solid #333;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: clamp(2.5rem, 10vw, 4rem); /* Teks X/O menyesuaikan layar */
-            cursor: pointer;
-            transition: all 0.3s ease;
+            width: 100%; height: 100%;
+            background-color: #12121a; border: 2px solid #333; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: clamp(2.5rem, 10vw, 4rem);
+            cursor: pointer; transition: all 0.3s ease;
             box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
         }
-
         .cell:hover { background-color: #1a1a2e; }
 
-        .cell.x {
-            color: #00f3ff; border-color: #00f3ff;
-            text-shadow: 0 0 15px #00f3ff, 0 0 30px #00f3ff;
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4), inset 0 0 15px rgba(0, 243, 255, 0.2);
-        }
-
-        .cell.o {
-            color: #ff00ff; border-color: #ff00ff;
-            text-shadow: 0 0 15px #ff00ff, 0 0 30px #ff00ff;
-            box-shadow: 0 0 15px rgba(255, 0, 255, 0.4), inset 0 0 15px rgba(255, 0, 255, 0.2);
-        }
-
-        .cell img {
-            width: 80%;
-            height: 80%;
-            object-fit: contain;
-        }
-        
+        .cell.x { color: #00f3ff; border-color: #00f3ff; text-shadow: 0 0 15px #00f3ff, 0 0 30px #00f3ff; box-shadow: 0 0 15px rgba(0, 243, 255, 0.4), inset 0 0 15px rgba(0, 243, 255, 0.2); }
+        .cell.o { color: #ff00ff; border-color: #ff00ff; text-shadow: 0 0 15px #ff00ff, 0 0 30px #ff00ff; box-shadow: 0 0 15px rgba(255, 0, 255, 0.4), inset 0 0 15px rgba(255, 0, 255, 0.2); }
+        .cell img { width: 80%; height: 80%; object-fit: contain; }
         .cell.x img { filter: drop-shadow(0 0 5px #00f3ff) drop-shadow(0 0 10px #00f3ff); }
         .cell.o img { filter: drop-shadow(0 0 5px #ff00ff) drop-shadow(0 0 10px #ff00ff); }
 
         /* --- ANIMASI --- */
         .cell.warning { animation: pulse-opacity 1s infinite alternate; }
-
-        @keyframes pulse-opacity {
-            0% { opacity: 1; }
-            100% { opacity: 0.3; }
-        }
-
-        @keyframes neon-win-x {
-            0%, 100% { box-shadow: 0 0 20px #00f3ff, inset 0 0 20px #00f3ff; }
-            50% { box-shadow: 0 0 100px #00f3ff, inset 0 0 50px #00f3ff; background-color: rgba(0, 243, 255, 0.1); }
-        }
-
-        @keyframes neon-win-o {
-            0%, 100% { box-shadow: 0 0 20px #ff00ff, inset 0 0 20px #ff00ff; }
-            50% { box-shadow: 0 0 100px #ff00ff, inset 0 0 50px #ff00ff; background-color: rgba(255, 0, 255, 0.1); }
-        }
-
+        @keyframes pulse-opacity { 0% { opacity: 1; } 100% { opacity: 0.3; } }
+        @keyframes neon-win-x { 0%, 100% { box-shadow: 0 0 20px #00f3ff, inset 0 0 20px #00f3ff; } 50% { box-shadow: 0 0 100px #00f3ff, inset 0 0 50px #00f3ff; background-color: rgba(0, 243, 255, 0.1); } }
+        @keyframes neon-win-o { 0%, 100% { box-shadow: 0 0 20px #ff00ff, inset 0 0 20px #ff00ff; } 50% { box-shadow: 0 0 100px #ff00ff, inset 0 0 50px #ff00ff; background-color: rgba(255, 0, 255, 0.1); } }
         .board.win-x { animation: neon-win-x 0.8s ease infinite; border-radius: 10px; }
         .board.win-o { animation: neon-win-o 0.8s ease infinite; border-radius: 10px; }
-
-        #status.win-text {
-            font-size: clamp(1.5rem, 6vw, 2rem);
-            animation: pulse-opacity 0.5s infinite alternate;
-        }
+        #status.win-text { font-size: clamp(1.5rem, 6vw, 2rem); animation: pulse-opacity 0.5s infinite alternate; }
     </style>
 </head>
 <body>
 
     <div id="screen-menu" class="screen active">
-        <h1>Infinite<br>Tic-Tac-Toe</h1>
+        <h1>Neon Infinite<br>Tic-Tac-Toe</h1>
+        <div class="btn-group" style="flex-direction: column; align-items: center;">
+            <button class="btn-blue" onclick="startLocalStandard()">Lokal: Standar</button>
+            <button class="btn-pink" onclick="goToDrawMenu()">Lokal: Kustom Karakter</button>
+            <button class="btn-orange" onclick="goToMultiplayerMenu()">Multiplayer Online</button>
+        </div>
+    </div>
+
+    <div id="screen-multiplayer" class="screen">
+        <h1>Online Mode</h1>
+        
+        <div class="multiplayer-box">
+            <h2 style="color: #00f3ff;">Buat Ruangan (Host)</h2>
+            <button class="btn-blue" onclick="hostRoom()">Generate Kode</button>
+            <div id="room-code-display"></div>
+        </div>
+
+        <div class="multiplayer-box">
+            <h2 style="color: #ff00ff;">Gabung Ruangan (Join)</h2>
+            <input type="text" id="join-code-input" placeholder="KODE RUANGAN" maxlength="5">
+            <button class="btn-pink" onclick="joinRoom()">Gabung</button>
+        </div>
+
+        <div id="mp-status" class="connection-status"></div>
+
         <div class="btn-group">
-            <button class="btn-blue" onclick="startGame()">Mulai Game</button>
-            <button class="btn-pink" onclick="goToDrawMenu()">Kustom Karakter</button>
+            <button onclick="goToMainMenu()">Kembali</button>
         </div>
     </div>
 
@@ -244,13 +260,14 @@
             </div>
         </div>
         <div class="btn-group">
-            <button onclick="saveAndStart()">Simpan & Mulai</button>
+            <button onclick="saveAndStartLocal()">Simpan & Mulai</button>
             <button onclick="goToMainMenu()">Kembali</button>
         </div>
     </div>
 
     <div id="screen-game" class="screen">
         <h1>Infinite Tic-Tac-Toe</h1>
+        <div id="network-role-status" style="font-size: 0.8rem; color: #aaa; margin-bottom: 5px; display: none;"></div>
         <div id="status" class="status-x">Giliran: Pemain 1</div>
 
         <div class="board">
@@ -267,128 +284,31 @@
 
         <div class="btn-group">
             <button id="restartBtn">Main Lagi</button>
-            <button onclick="goToMainMenu()">Menu Utama</button>
+            <button onclick="disconnectAndGoHome()">Keluar</button>
         </div>
     </div>
 
     <script>
-        // --- NAVIGASI LAYAR ---
+        // --- VARIABEL GLOBAL ---
         const screenMenu = document.getElementById('screen-menu');
         const screenDraw = document.getElementById('screen-draw');
+        const screenMultiplayer = document.getElementById('screen-multiplayer');
         const screenGame = document.getElementById('screen-game');
-
-        function showScreen(screen) {
-            screenMenu.classList.remove('active');
-            screenDraw.classList.remove('active');
-            screenGame.classList.remove('active');
-            screen.classList.add('active');
-        }
-
-        function goToMainMenu() { showScreen(screenMenu); }
-        function goToDrawMenu() { showScreen(screenDraw); }
         
-        // --- LOGIKA MENGGAMBAR DI CANVAS (TOUCH OPTIMIZED) ---
+        let isOnlineMultiplayer = false;
+        let myNetworkRole = null; // 'X' (Host) atau 'O' (Guest)
+        let peer = null;
+        let conn = null;
+
         let customSymbol1 = null;
         let customSymbol2 = null;
 
-        function setupCanvas(canvasId, color) {
-            const canvas = document.getElementById(canvasId);
-            const ctx = canvas.getContext('2d');
-            let isDrawing = false;
-
-            ctx.lineWidth = 6;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = color;
-
-            function getCoordinates(e) {
-                const rect = canvas.getBoundingClientRect();
-                // Deteksi apakah input dari sentuhan atau mouse
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                
-                // Menyesuaikan rasio CSS dengan resolusi internal canvas
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-
-                return {
-                    x: (clientX - rect.left) * scaleX,
-                    y: (clientY - rect.top) * scaleY
-                };
-            }
-
-            function startPosition(e) {
-                e.preventDefault(); // Mencegah scrolling browser di HP
-                isDrawing = true;
-                draw(e);
-            }
-
-            function endPosition(e) {
-                if(e && e.cancelable) e.preventDefault();
-                isDrawing = false;
-                ctx.beginPath();
-            }
-
-            function draw(e) {
-                if (!isDrawing) return;
-                e.preventDefault(); // Mencegah scrolling saat jari digeser
-                
-                const pos = getCoordinates(e);
-                ctx.lineTo(pos.x, pos.y);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(pos.x, pos.y);
-            }
-
-            // Mouse Events (PC)
-            canvas.addEventListener('mousedown', startPosition);
-            canvas.addEventListener('mouseup', endPosition);
-            canvas.addEventListener('mousemove', draw);
-            canvas.addEventListener('mouseleave', endPosition);
-
-            // Touch Events (Android/iOS) menggunakan {passive: false} sangat penting untuk e.preventDefault()
-            canvas.addEventListener('touchstart', startPosition, { passive: false });
-            canvas.addEventListener('touchend', endPosition, { passive: false });
-            canvas.addEventListener('touchcancel', endPosition, { passive: false });
-            canvas.addEventListener('touchmove', draw, { passive: false });
-        }
-
-        setupCanvas('canvas1', '#00f3ff');
-        setupCanvas('canvas2', '#ff00ff');
-
-        function clearCanvas(playerNum) {
-            const canvas = document.getElementById(`canvas${playerNum}`);
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-
-        function isCanvasEmpty(canvas) {
-            const ctx = canvas.getContext('2d');
-            const pixelBuffer = new Uint32Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer);
-            return !pixelBuffer.some(color => color !== 0);
-        }
-
-        function saveAndStart() {
-            const c1 = document.getElementById('canvas1');
-            const c2 = document.getElementById('canvas2');
-            
-            customSymbol1 = isCanvasEmpty(c1) ? null : c1.toDataURL();
-            customSymbol2 = isCanvasEmpty(c2) ? null : c2.toDataURL();
-
-            startGame();
-        }
-
-        // --- LOGIKA GAME UTAMA ---
         const cells = document.querySelectorAll('.cell');
         const statusText = document.getElementById('status');
         const restartBtn = document.getElementById('restartBtn');
         const boardElement = document.querySelector('.board');
-        
-        const winConditions = [
-            [0, 1, 2], [3, 4, 5], [6, 7, 8],
-            [0, 3, 6], [1, 4, 7], [2, 5, 8],
-            [0, 4, 8], [2, 4, 6]            
-        ];
+        const mpStatus = document.getElementById('mp-status');
+        const roleStatus = document.getElementById('network-role-status');
 
         let board = ["", "", "", "", "", "", "", "", ""];
         let currentPlayer = "X";
@@ -396,62 +316,212 @@
         let movesX = [];
         let movesO = [];
 
-        function startGame() {
-            if(!screenDraw.classList.contains('active') && event.target.innerText.includes('Mulai')){
-                customSymbol1 = null;
-                customSymbol2 = null;
-                clearCanvas(1);
-                clearCanvas(2);
-            }
+        const winConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]            
+        ];
+
+        // --- NAVIGASI LAYAR ---
+        function showScreen(screen) {
+            screenMenu.classList.remove('active');
+            screenDraw.classList.remove('active');
+            screenMultiplayer.classList.remove('active');
+            screenGame.classList.remove('active');
+            screen.classList.add('active');
+        }
+
+        function goToMainMenu() { 
+            cleanupNetwork();
+            showScreen(screenMenu); 
+        }
+        function goToDrawMenu() { showScreen(screenDraw); }
+        function goToMultiplayerMenu() { 
+            mpStatus.textContent = "";
+            document.getElementById('room-code-display').style.display = 'none';
+            showScreen(screenMultiplayer); 
+        }
+
+        function startLocalStandard() {
+            customSymbol1 = null; customSymbol2 = null;
+            clearCanvas(1); clearCanvas(2);
+            isOnlineMultiplayer = false;
+            myNetworkRole = null;
+            roleStatus.style.display = 'none';
             showScreen(screenGame);
             resetBoard();
         }
 
-        cells.forEach(cell => cell.addEventListener('click', cellClicked));
-        restartBtn.addEventListener('click', resetBoard);
-
-        function cellClicked() {
-            const cellIndex = this.getAttribute('data-index');
-            if (board[cellIndex] !== "" || !isGameRunning) return;
-            updateCell(this, cellIndex);
-            checkWinner();
+        function saveAndStartLocal() {
+            const c1 = document.getElementById('canvas1');
+            const c2 = document.getElementById('canvas2');
+            customSymbol1 = isCanvasEmpty(c1) ? null : c1.toDataURL();
+            customSymbol2 = isCanvasEmpty(c2) ? null : c2.toDataURL();
+            isOnlineMultiplayer = false;
+            myNetworkRole = null;
+            roleStatus.style.display = 'none';
+            showScreen(screenGame);
+            resetBoard();
         }
 
-        function updateCell(cell, index) {
-            board[index] = currentPlayer;
+        function disconnectAndGoHome() {
+            cleanupNetwork();
+            goToMainMenu();
+        }
+
+        // --- MULTIPLAYER LOGIC (PEERJS) ---
+        function generateRoomCode() {
+            return Math.random().toString(36).substring(2, 7).toUpperCase();
+        }
+
+        function cleanupNetwork() {
+            if(conn) { conn.close(); conn = null; }
+            if(peer) { peer.destroy(); peer = null; }
+            isOnlineMultiplayer = false;
+        }
+
+        function hostRoom() {
+            cleanupNetwork();
+            const rawCode = generateRoomCode();
+            const fullPeerId = 'NEONTIC-' + rawCode;
             
-            if (currentPlayer === "X") {
-                cell.innerHTML = customSymbol1 ? `<img src="${customSymbol1}" alt="P1">` : "X";
+            mpStatus.textContent = "Menghasilkan kode ruangan...";
+            peer = new Peer(fullPeerId);
+
+            peer.on('open', (id) => {
+                const displayCode = document.getElementById('room-code-display');
+                displayCode.textContent = rawCode;
+                displayCode.style.display = 'block';
+                mpStatus.textContent = "Menunggu lawan bergabung...";
+            });
+
+            peer.on('connection', (connection) => {
+                conn = connection;
+                myNetworkRole = 'X';
+                setupConnectionData();
+                mpStatus.textContent = "Lawan terhubung! Memulai...";
+                setTimeout(() => startGameOnline(), 1000);
+            });
+
+            peer.on('error', (err) => {
+                mpStatus.textContent = "Error: " + err.type;
+            });
+        }
+
+        function joinRoom() {
+            const inputCode = document.getElementById('join-code-input').value.toUpperCase().trim();
+            if(inputCode.length !== 5) {
+                mpStatus.textContent = "Kode ruangan harus 5 karakter!";
+                return;
+            }
+
+            cleanupNetwork();
+            mpStatus.textContent = "Menghubungkan...";
+            peer = new Peer(); // Guest gets random ID
+
+            peer.on('open', () => {
+                const targetPeerId = 'NEONTIC-' + inputCode;
+                conn = peer.connect(targetPeerId);
+                
+                conn.on('open', () => {
+                    myNetworkRole = 'O';
+                    setupConnectionData();
+                    mpStatus.textContent = "Terhubung! Memulai...";
+                    setTimeout(() => startGameOnline(), 1000);
+                });
+
+                conn.on('error', (err) => mpStatus.textContent = "Koneksi terputus.");
+            });
+
+            peer.on('error', (err) => {
+                mpStatus.textContent = "Gagal terhubung. Pastikan kode benar.";
+            });
+        }
+
+        function setupConnectionData() {
+            conn.on('data', (data) => {
+                if (data.type === 'move') {
+                    processMove(data.index, data.player);
+                } else if (data.type === 'restart') {
+                    resetBoard(false); // Reset tapi jangan kirim sinyal balik
+                }
+            });
+            conn.on('close', () => {
+                alert("Lawan terputus dari ruangan.");
+                disconnectAndGoHome();
+            });
+        }
+
+        function startGameOnline() {
+            customSymbol1 = null; customSymbol2 = null; // Pakai ikon standar X & O untuk online agar ringan
+            isOnlineMultiplayer = true;
+            roleStatus.textContent = `Kamu adalah Pemain ${myNetworkRole === 'X' ? '1 (Biru)' : '2 (Pink)'}`;
+            roleStatus.style.display = 'block';
+            showScreen(screenGame);
+            resetBoard(false);
+        }
+
+        // --- LOGIKA GAME ---
+        cells.forEach(cell => cell.addEventListener('click', function() {
+            const cellIndex = parseInt(this.getAttribute('data-index'));
+            
+            // Validasi langkah
+            if (board[cellIndex] !== "" || !isGameRunning) return;
+            
+            // Jika mode online, cek apakah ini giliran pemain jaringan yang benar
+            if (isOnlineMultiplayer && currentPlayer !== myNetworkRole) {
+                return; // Bukan giliranmu
+            }
+
+            // Jalankan langkah di lokal
+            processMove(cellIndex, currentPlayer);
+
+            // Kirim langkah ke lawan jika online
+            if (isOnlineMultiplayer && conn && conn.open) {
+                conn.send({ type: 'move', index: cellIndex, player: myNetworkRole });
+            }
+        }));
+
+        restartBtn.addEventListener('click', () => {
+            resetBoard(true); // true = broadcast restart
+        });
+
+        function processMove(index, playerNum) {
+            const cell = document.querySelector(`.cell[data-index="${index}"]`);
+            board[index] = playerNum;
+            
+            if (playerNum === "X") {
+                cell.innerHTML = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
                 cell.classList.add('x');
             } else {
-                cell.innerHTML = customSymbol2 ? `<img src="${customSymbol2}" alt="P2">` : "O";
+                cell.innerHTML = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
                 cell.classList.add('o');
             }
 
-            let currentMoves = (currentPlayer === "X") ? movesX : movesO;
+            let currentMoves = (playerNum === "X") ? movesX : movesO;
             currentMoves.push(index);
 
             if (currentMoves.length > 3) {
                 let oldestMoveIndex = currentMoves.shift(); 
                 board[oldestMoveIndex] = ""; 
-                
                 let oldestCell = document.querySelector(`.cell[data-index="${oldestMoveIndex}"]`);
                 oldestCell.innerHTML = "";
                 oldestCell.classList.remove('x', 'o', 'warning');
             }
 
             updateWarnings();
+            checkWinner();
         }
 
         function updateWarnings() {
             cells.forEach(c => c.classList.remove('warning'));
             if (movesX.length === 3) {
-                let oldestXCell = document.querySelector(`.cell[data-index="${movesX[0]}"]`);
-                if(oldestXCell) oldestXCell.classList.add('warning');
+                let oldestX = document.querySelector(`.cell[data-index="${movesX[0]}"]`);
+                if(oldestX) oldestX.classList.add('warning');
             }
             if (movesO.length === 3) {
-                let oldestOCell = document.querySelector(`.cell[data-index="${movesO[0]}"]`);
-                if(oldestOCell) oldestOCell.classList.add('warning');
+                let oldestO = document.querySelector(`.cell[data-index="${movesO[0]}"]`);
+                if(oldestO) oldestO.classList.add('warning');
             }
         }
 
@@ -463,40 +533,37 @@
         function updateStatusText() {
             let symbolDisplay = "";
             if (currentPlayer === "X") {
-                symbolDisplay = customSymbol1 ? `<img src="${customSymbol1}" alt="P1">` : "X";
+                symbolDisplay = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
             } else {
-                symbolDisplay = customSymbol2 ? `<img src="${customSymbol2}" alt="P2">` : "O";
+                symbolDisplay = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
             }
+            
+            // Tambahkan " (Giliranmu)" jika online
+            let extraText = (isOnlineMultiplayer && currentPlayer === myNetworkRole) ? " - Giliranmu!" : "";
 
-            statusText.innerHTML = `Giliran: ${symbolDisplay}`;
+            statusText.innerHTML = `Giliran: ${symbolDisplay}${extraText}`;
             statusText.className = (currentPlayer === "X") ? 'status-x' : 'status-o';
         }
 
         function checkWinner() {
             let roundWon = false;
-
             for (let i = 0; i < winConditions.length; i++) {
-                const condition = winConditions[i];
-                const cellA = board[condition[0]];
-                const cellB = board[condition[1]];
-                const cellC = board[condition[2]];
-
-                if (cellA === "" || cellB === "" || cellC === "") continue;
-                if (cellA === cellB && cellB === cellC) {
-                    roundWon = true;
-                    break;
+                const [a, b, c] = winConditions[i];
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    roundWon = true; break;
                 }
             }
 
             if (roundWon) {
                 let winnerSymbol = "";
-                if (currentPlayer === "X") {
-                    winnerSymbol = customSymbol1 ? `<img src="${customSymbol1}" alt="P1">` : "X";
-                } else {
-                    winnerSymbol = customSymbol2 ? `<img src="${customSymbol2}" alt="P2">` : "O";
-                }
+                if (currentPlayer === "X") winnerSymbol = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
+                else winnerSymbol = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
 
-                statusText.innerHTML = `🎉 ${winnerSymbol} MENANG! 🎉`;
+                let winMsg = isOnlineMultiplayer 
+                    ? (currentPlayer === myNetworkRole ? `🎉 KAMU MENANG! 🎉` : `😭 LAWAN MENANG 😭`)
+                    : `🎉 ${winnerSymbol} MENANG! 🎉`;
+
+                statusText.innerHTML = winMsg;
                 statusText.classList.add('win-text');
                 boardElement.classList.add(`win-${currentPlayer.toLowerCase()}`);
                 
@@ -507,11 +574,14 @@
             }
         }
 
-        function resetBoard() {
+        function resetBoard(broadcast = false) {
+            if (broadcast && isOnlineMultiplayer && conn && conn.open) {
+                conn.send({ type: 'restart' });
+            }
+
             currentPlayer = "X";
             board = ["", "", "", "", "", "", "", "", ""];
-            movesX = [];
-            movesO = [];
+            movesX = []; movesO = [];
             
             boardElement.classList.remove('win-x', 'win-o');
             statusText.classList.remove('win-text');
@@ -523,6 +593,46 @@
             
             updateStatusText();
             isGameRunning = true;
+        }
+
+        // --- LOGIKA MENGGAMBAR DI CANVAS (TOUCH OPTIMIZED) ---
+        function setupCanvas(canvasId, color) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            let isDrawing = false;
+            ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = color;
+
+            function getCoordinates(e) {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) };
+            }
+            function startPosition(e) { e.preventDefault(); isDrawing = true; draw(e); }
+            function endPosition(e) { if(e && e.cancelable) e.preventDefault(); isDrawing = false; ctx.beginPath(); }
+            function draw(e) {
+                if (!isDrawing) return;
+                e.preventDefault();
+                const pos = getCoordinates(e);
+                ctx.lineTo(pos.x, pos.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+            }
+            canvas.addEventListener('mousedown', startPosition); canvas.addEventListener('mouseup', endPosition);
+            canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseleave', endPosition);
+            canvas.addEventListener('touchstart', startPosition, { passive: false });
+            canvas.addEventListener('touchend', endPosition, { passive: false });
+            canvas.addEventListener('touchmove', draw, { passive: false });
+        }
+        setupCanvas('canvas1', '#00f3ff');
+        setupCanvas('canvas2', '#ff00ff');
+
+        function clearCanvas(playerNum) {
+            const canvas = document.getElementById(`canvas${playerNum}`);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        function isCanvasEmpty(canvas) {
+            const ctx = canvas.getContext('2d');
+            return !new Uint32Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer).some(color => color !== 0);
         }
     </script>
 </body>
