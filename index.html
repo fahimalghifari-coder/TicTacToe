@@ -130,8 +130,8 @@
             color: #ff8c00;
             font-size: 0.9rem;
             margin-top: 10px;
-            height: 20px;
             text-align: center;
+            min-height: 20px;
         }
 
         /* --- MENU GAMBAR KUSTOM --- */
@@ -323,14 +323,18 @@
             [0, 4, 8], [2, 4, 6]            
         ];
 
-        // KONFIGURASI STUN SERVER
+        // KONFIGURASI PEERJS YANG DIOPTIMASI (STUN + PING SERVER STABIL)
         const peerConfig = {
+            host: '0.peerjs.com',
+            port: 443,
+            secure: true,
             config: {
                 'iceServers': [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' }
                 ]
-            }
+            },
+            debug: 1
         };
 
         // --- NAVIGASI LAYAR ---
@@ -378,7 +382,7 @@
             resetBoard();
         }
 
-        // --- MULTIPLAYER LOGIC (PEERJS) ---
+        // --- MULTIPLAYER LOGIC DENGAN TIMEOUT HANDLING ---
         function generateRoomCode() {
             return Math.random().toString(36).substring(2, 7).toUpperCase();
         }
@@ -416,14 +420,26 @@
             const rawCode = generateRoomCode();
             const fullPeerId = 'NEONTIC-' + rawCode;
             
-            mpStatus.textContent = "Menyiapkan ruangan...";
+            mpStatus.textContent = "Menghubungkan ke server jaringan...";
+            
+            // Timeout pelindung jika server publik lambat (lebih dari 7 detik)
+            let isConnectedOpen = false;
+            const timeoutTimer = setTimeout(() => {
+                if (!isConnectedOpen) {
+                    mpStatus.textContent = "Koneksi lambat/gagal. Coba klik 'Generate Kode' lagi!";
+                    cleanupNetwork();
+                }
+            }, 7000);
+
             peer = new Peer(fullPeerId, peerConfig);
 
             peer.on('open', (id) => {
+                isConnectedOpen = true;
+                clearTimeout(timeoutTimer);
                 const displayCode = document.getElementById('room-code-display');
                 displayCode.textContent = rawCode;
                 displayCode.style.display = 'block';
-                mpStatus.textContent = "Menunggu lawan bergabung...";
+                mpStatus.textContent = "Kode Siap! Bagikan ke lawan.";
             });
 
             peer.on('connection', (connection) => {
@@ -438,12 +454,17 @@
                 conn.on('open', () => {
                     setupConnectionData();
                     mpStatus.textContent = "Lawan terhubung! Memulai permainan...";
-                    setTimeout(() => startGameOnline(), 500); 
+                    setTimeout(() => startGameOnline(), 400); 
                 });
             });
 
             peer.on('error', (err) => {
-                mpStatus.textContent = "Error: Terjadi kesalahan jaringan.";
+                clearTimeout(timeoutTimer);
+                if(err.type === 'unavailable-id') {
+                    mpStatus.textContent = "Kode kembar terdeteksi. Silakan klik ulang!";
+                } else {
+                    mpStatus.textContent = "Gagal server: " + err.type;
+                }
             });
         }
 
@@ -455,7 +476,16 @@
             }
 
             cleanupNetwork();
-            mpStatus.textContent = "Menghubungkan ke Host...";
+            mpStatus.textContent = "Mencari ruangan...";
+
+            let isConnectedOpen = false;
+            const timeoutTimer = setTimeout(() => {
+                if (!isConnectedOpen) {
+                    mpStatus.textContent = "Gagal terhubung. Pastikan kode benar & host online.";
+                    cleanupNetwork();
+                }
+            }, 7000);
+
             peer = new Peer(peerConfig); 
 
             peer.on('open', () => {
@@ -463,17 +493,23 @@
                 conn = peer.connect(targetPeerId, { reliable: true });
                 
                 conn.on('open', () => {
+                    isConnectedOpen = true;
+                    clearTimeout(timeoutTimer);
                     myNetworkRole = 'O';
                     setupConnectionData();
                     mpStatus.textContent = "Berhasil Terhubung! Memulai...";
-                    setTimeout(() => startGameOnline(), 500);
+                    setTimeout(() => startGameOnline(), 400);
                 });
 
-                conn.on('error', (err) => mpStatus.textContent = "Koneksi terputus.");
+                conn.on('error', (err) => {
+                    clearTimeout(timeoutTimer);
+                    mpStatus.textContent = "Koneksi ke host ditolak/gagal.";
+                });
             });
 
             peer.on('error', (err) => {
-                mpStatus.textContent = "Gagal terhubung. Pastikan kode host benar.";
+                clearTimeout(timeoutTimer);
+                mpStatus.textContent = "Gagal inisialisasi jaringan.";
             });
         }
 
