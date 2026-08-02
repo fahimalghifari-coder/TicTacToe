@@ -131,7 +131,6 @@
             font-size: 0.9rem;
             margin-top: 10px;
             height: 20px;
-            text-align: center;
         }
 
         /* --- MENU GAMBAR KUSTOM --- */
@@ -216,7 +215,7 @@
 <body>
 
     <div id="screen-menu" class="screen active">
-        <h1>Infinite<br>Tic-Tac-Toe</h1>
+        <h1>Neon Infinite<br>Tic-Tac-Toe</h1>
         <div class="btn-group" style="flex-direction: column; align-items: center;">
             <button class="btn-blue" onclick="startLocalStandard()">Lokal: Standar</button>
             <button class="btn-pink" onclick="goToDrawMenu()">Lokal: Kustom Karakter</button>
@@ -297,7 +296,7 @@
         const screenGame = document.getElementById('screen-game');
         
         let isOnlineMultiplayer = false;
-        let myNetworkRole = null; 
+        let myNetworkRole = null; // 'X' (Host) atau 'O' (Guest)
         let peer = null;
         let conn = null;
 
@@ -323,16 +322,6 @@
             [0, 4, 8], [2, 4, 6]            
         ];
 
-        // KONFIGURASI STUN SERVER GOOGLE UNTUK STABILITAS
-        const peerConfig = {
-            config: {
-                'iceServers': [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        };
-
         // --- NAVIGASI LAYAR ---
         function showScreen(screen) {
             screenMenu.classList.remove('active');
@@ -346,11 +335,8 @@
             cleanupNetwork();
             showScreen(screenMenu); 
         }
-
         function goToDrawMenu() { showScreen(screenDraw); }
-
         function goToMultiplayerMenu() { 
-            cleanupNetwork(); 
             mpStatus.textContent = "";
             document.getElementById('room-code-display').style.display = 'none';
             showScreen(screenMultiplayer); 
@@ -378,31 +364,20 @@
             resetBoard();
         }
 
-        // --- MULTIPLAYER LOGIC DENGAN PEMBERSIHAN AGGRESIF ---
+        function disconnectAndGoHome() {
+            cleanupNetwork();
+            goToMainMenu();
+        }
+
+        // --- MULTIPLAYER LOGIC (PEERJS) ---
         function generateRoomCode() {
             return Math.random().toString(36).substring(2, 7).toUpperCase();
         }
 
         function cleanupNetwork() {
-            if (conn) { 
-                conn.close(); 
-                conn = null; 
-            }
-            if (peer) { 
-                peer.disconnect(); 
-                peer.destroy(); 
-                peer = null;
-            }
+            if(conn) { conn.close(); conn = null; }
+            if(peer) { peer.destroy(); peer = null; }
             isOnlineMultiplayer = false;
-            myNetworkRole = null;
-        }
-
-        function disconnectAndGoHome() {
-            if(isOnlineMultiplayer && conn && conn.open) {
-                conn.send({ type: 'player_left' });
-            }
-            cleanupNetwork();
-            goToMainMenu();
         }
 
         function hostRoom() {
@@ -410,8 +385,8 @@
             const rawCode = generateRoomCode();
             const fullPeerId = 'NEONTIC-' + rawCode;
             
-            mpStatus.textContent = "Membuat ruangan...";
-            peer = new Peer(fullPeerId, peerConfig);
+            mpStatus.textContent = "Menghasilkan kode ruangan...";
+            peer = new Peer(fullPeerId);
 
             peer.on('open', (id) => {
                 const displayCode = document.getElementById('room-code-display');
@@ -421,23 +396,15 @@
             });
 
             peer.on('connection', (connection) => {
-                if (conn) {
-                    connection.close(); 
-                    return;
-                }
-                
                 conn = connection;
                 myNetworkRole = 'X';
-                
-                conn.on('open', () => {
-                    setupConnectionData();
-                    mpStatus.textContent = "Lawan terhubung! Memulai...";
-                    setTimeout(() => startGameOnline(), 400); 
-                });
+                setupConnectionData();
+                mpStatus.textContent = "Lawan terhubung! Memulai...";
+                setTimeout(() => startGameOnline(), 1000);
             });
 
             peer.on('error', (err) => {
-                mpStatus.textContent = "Error Jaringan. Coba lagi.";
+                mpStatus.textContent = "Error: " + err.type;
             });
         }
 
@@ -450,24 +417,24 @@
 
             cleanupNetwork();
             mpStatus.textContent = "Menghubungkan...";
-            peer = new Peer(peerConfig); 
+            peer = new Peer(); // Guest gets random ID
 
             peer.on('open', () => {
                 const targetPeerId = 'NEONTIC-' + inputCode;
-                conn = peer.connect(targetPeerId, { reliable: true });
+                conn = peer.connect(targetPeerId);
                 
                 conn.on('open', () => {
                     myNetworkRole = 'O';
                     setupConnectionData();
                     mpStatus.textContent = "Terhubung! Memulai...";
-                    setTimeout(() => startGameOnline(), 400);
+                    setTimeout(() => startGameOnline(), 1000);
                 });
 
-                conn.on('error', (err) => mpStatus.textContent = "Gagal terhubung ke host.");
+                conn.on('error', (err) => mpStatus.textContent = "Koneksi terputus.");
             });
 
             peer.on('error', (err) => {
-                mpStatus.textContent = "Gagal inisialisasi jaringan.";
+                mpStatus.textContent = "Gagal terhubung. Pastikan kode benar.";
             });
         }
 
@@ -476,23 +443,17 @@
                 if (data.type === 'move') {
                     processMove(data.index, data.player);
                 } else if (data.type === 'restart') {
-                    resetBoard(false);
-                } else if (data.type === 'player_left') {
-                    alert("Lawan meninggalkan ruangan.");
-                    disconnectAndGoHome();
+                    resetBoard(false); // Reset tapi jangan kirim sinyal balik
                 }
             });
-
             conn.on('close', () => {
-                if (isOnlineMultiplayer) {
-                    alert("Koneksi terputus.");
-                    disconnectAndGoHome();
-                }
+                alert("Lawan terputus dari ruangan.");
+                disconnectAndGoHome();
             });
         }
 
         function startGameOnline() {
-            customSymbol1 = null; customSymbol2 = null; 
+            customSymbol1 = null; customSymbol2 = null; // Pakai ikon standar X & O untuk online agar ringan
             isOnlineMultiplayer = true;
             roleStatus.textContent = `Kamu adalah Pemain ${myNetworkRole === 'X' ? '1 (Biru)' : '2 (Pink)'}`;
             roleStatus.style.display = 'block';
@@ -504,21 +465,25 @@
         cells.forEach(cell => cell.addEventListener('click', function() {
             const cellIndex = parseInt(this.getAttribute('data-index'));
             
+            // Validasi langkah
             if (board[cellIndex] !== "" || !isGameRunning) return;
             
+            // Jika mode online, cek apakah ini giliran pemain jaringan yang benar
             if (isOnlineMultiplayer && currentPlayer !== myNetworkRole) {
-                return; 
+                return; // Bukan giliranmu
             }
 
+            // Jalankan langkah di lokal
             processMove(cellIndex, currentPlayer);
 
+            // Kirim langkah ke lawan jika online
             if (isOnlineMultiplayer && conn && conn.open) {
                 conn.send({ type: 'move', index: cellIndex, player: myNetworkRole });
             }
         }));
 
         restartBtn.addEventListener('click', () => {
-            resetBoard(true);
+            resetBoard(true); // true = broadcast restart
         });
 
         function processMove(index, playerNum) {
@@ -573,10 +538,8 @@
                 symbolDisplay = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
             }
             
-            let extraText = "";
-            if (isOnlineMultiplayer) {
-                extraText = (currentPlayer === myNetworkRole) ? " - Giliranmu!" : " - Menunggu Lawan...";
-            }
+            // Tambahkan " (Giliranmu)" jika online
+            let extraText = (isOnlineMultiplayer && currentPlayer === myNetworkRole) ? " - Giliranmu!" : "";
 
             statusText.innerHTML = `Giliran: ${symbolDisplay}${extraText}`;
             statusText.className = (currentPlayer === "X") ? 'status-x' : 'status-o';
@@ -629,10 +592,10 @@
             });
             
             updateStatusText();
-            setTimeout(() => { isGameRunning = true; }, 100);
+            isGameRunning = true;
         }
 
-        // --- LOGIKA MENGGAMBAR DI CANVAS ---
+        // --- LOGIKA MENGGAMBAR DI CANVAS (TOUCH OPTIMIZED) ---
         function setupCanvas(canvasId, color) {
             const canvas = document.getElementById(canvasId);
             const ctx = canvas.getContext('2d');
