@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neon Infinite Tic-Tac-Toe</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap');
 
@@ -55,7 +54,7 @@
             text-align: center;
         }
 
-        /* --- TOMBOL & INPUT --- */
+        /* --- TOMBOL --- */
         .btn-group {
             display: flex;
             gap: 15px;
@@ -65,7 +64,7 @@
         }
 
         button {
-            padding: 10px 20px;
+            padding: 12px 24px;
             font-size: 1rem;
             font-family: 'Orbitron', sans-serif;
             background: transparent;
@@ -84,54 +83,6 @@
 
         .btn-pink { border-color: #ff00ff; color: #ff00ff; }
         .btn-pink:hover, .btn-pink:active { background: #ff00ff; color: #0a0a0f; box-shadow: 0 0 15px #ff00ff; }
-        
-        .btn-orange { border-color: #ff8c00; color: #ff8c00; }
-        .btn-orange:hover, .btn-orange:active { background: #ff8c00; color: #0a0a0f; box-shadow: 0 0 15px #ff8c00; }
-
-        input[type="text"] {
-            padding: 10px;
-            font-size: 1.2rem;
-            font-family: 'Orbitron', sans-serif;
-            text-align: center;
-            text-transform: uppercase;
-            background: #12121a;
-            color: #00f3ff;
-            border: 2px solid #00f3ff;
-            border-radius: 5px;
-            outline: none;
-            width: 200px;
-            box-shadow: inset 0 0 10px rgba(0,243,255,0.3);
-        }
-
-        .multiplayer-box {
-            background: #12121a;
-            padding: 20px;
-            border: 2px solid #333;
-            border-radius: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-            width: 100%;
-            max-width: 400px;
-        }
-
-        #room-code-display {
-            font-size: 2rem;
-            color: #ff00ff;
-            text-shadow: 0 0 15px #ff00ff;
-            letter-spacing: 5px;
-            margin: 10px 0;
-            display: none;
-        }
-
-        .connection-status {
-            color: #ff8c00;
-            font-size: 0.9rem;
-            margin-top: 10px;
-            height: 20px;
-        }
 
         /* --- MENU GAMBAR KUSTOM --- */
         .canvas-container {
@@ -217,31 +168,8 @@
     <div id="screen-menu" class="screen active">
         <h1>Infinite<br>Tic-Tac-Toe</h1>
         <div class="btn-group" style="flex-direction: column; align-items: center;">
-            <button class="btn-blue" onclick="startLocalStandard()">Lokal: Standar</button>
-            <button class="btn-pink" onclick="goToDrawMenu()">Lokal: Kustom Karakter</button>
-            <button class="btn-orange" onclick="goToMultiplayerMenu()">Multiplayer Online</button>
-        </div>
-    </div>
-
-    <div id="screen-multiplayer" class="screen">
-        <h1>Online Mode</h1>
-        
-        <div class="multiplayer-box">
-            <h2 style="color: #00f3ff;">Buat Ruangan (Host)</h2>
-            <button class="btn-blue" onclick="hostRoom()">Generate Kode</button>
-            <div id="room-code-display"></div>
-        </div>
-
-        <div class="multiplayer-box">
-            <h2 style="color: #ff00ff;">Gabung Ruangan (Join)</h2>
-            <input type="text" id="join-code-input" placeholder="KODE RUANGAN" maxlength="5">
-            <button class="btn-pink" onclick="joinRoom()">Gabung</button>
-        </div>
-
-        <div id="mp-status" class="connection-status"></div>
-
-        <div class="btn-group">
-            <button onclick="goToMainMenu()">Kembali</button>
+            <button class="btn-blue" onclick="startLocalStandard()">Mulai Game (Standar)</button>
+            <button class="btn-pink" onclick="goToDrawMenu()">Kustom Karakter (2 Pemain)</button>
         </div>
     </div>
 
@@ -260,14 +188,13 @@
             </div>
         </div>
         <div class="btn-group">
-            <button onclick="saveAndStartLocal()">Simpan & Mulai</button>
+            <button onclick="saveAndStart()">Simpan & Mulai</button>
             <button onclick="goToMainMenu()">Kembali</button>
         </div>
     </div>
 
     <div id="screen-game" class="screen">
         <h1>Infinite Tic-Tac-Toe</h1>
-        <div id="network-role-status" style="font-size: 0.8rem; color: #aaa; margin-bottom: 5px; display: none;"></div>
         <div id="status" class="status-x">Giliran: Pemain 1</div>
 
         <div class="board">
@@ -284,21 +211,14 @@
 
         <div class="btn-group">
             <button id="restartBtn">Main Lagi</button>
-            <button onclick="disconnectAndGoHome()">Keluar</button>
+            <button onclick="goToMainMenu()">Menu Utama</button>
         </div>
     </div>
 
     <script>
-        // --- VARIABEL GLOBAL ---
         const screenMenu = document.getElementById('screen-menu');
         const screenDraw = document.getElementById('screen-draw');
-        const screenMultiplayer = document.getElementById('screen-multiplayer');
         const screenGame = document.getElementById('screen-game');
-        
-        let isOnlineMultiplayer = false;
-        let myNetworkRole = null; // 'X' (Host) atau 'O' (Guest)
-        let peer = null;
-        let conn = null;
 
         let customSymbol1 = null;
         let customSymbol2 = null;
@@ -307,8 +227,6 @@
         const statusText = document.getElementById('status');
         const restartBtn = document.getElementById('restartBtn');
         const boardElement = document.querySelector('.board');
-        const mpStatus = document.getElementById('mp-status');
-        const roleStatus = document.getElementById('network-role-status');
 
         let board = ["", "", "", "", "", "", "", "", ""];
         let currentPlayer = "X";
@@ -322,168 +240,43 @@
             [0, 4, 8], [2, 4, 6]            
         ];
 
-        // --- NAVIGASI LAYAR ---
         function showScreen(screen) {
             screenMenu.classList.remove('active');
             screenDraw.classList.remove('active');
-            screenMultiplayer.classList.remove('active');
             screenGame.classList.remove('active');
             screen.classList.add('active');
         }
 
-        function goToMainMenu() { 
-            cleanupNetwork();
-            showScreen(screenMenu); 
-        }
+        function goToMainMenu() { showScreen(screenMenu); }
         function goToDrawMenu() { showScreen(screenDraw); }
-        function goToMultiplayerMenu() { 
-            mpStatus.textContent = "";
-            document.getElementById('room-code-display').style.display = 'none';
-            showScreen(screenMultiplayer); 
-        }
 
         function startLocalStandard() {
-            customSymbol1 = null; customSymbol2 = null;
-            clearCanvas(1); clearCanvas(2);
-            isOnlineMultiplayer = false;
-            myNetworkRole = null;
-            roleStatus.style.display = 'none';
+            customSymbol1 = null; 
+            customSymbol2 = null;
+            clearCanvas(1); 
+            clearCanvas(2);
             showScreen(screenGame);
             resetBoard();
         }
 
-        function saveAndStartLocal() {
+        function saveAndStart() {
             const c1 = document.getElementById('canvas1');
             const c2 = document.getElementById('canvas2');
             customSymbol1 = isCanvasEmpty(c1) ? null : c1.toDataURL();
             customSymbol2 = isCanvasEmpty(c2) ? null : c2.toDataURL();
-            isOnlineMultiplayer = false;
-            myNetworkRole = null;
-            roleStatus.style.display = 'none';
             showScreen(screenGame);
             resetBoard();
         }
 
-        function disconnectAndGoHome() {
-            cleanupNetwork();
-            goToMainMenu();
-        }
-
-        // --- MULTIPLAYER LOGIC (PEERJS) ---
-        function generateRoomCode() {
-            return Math.random().toString(36).substring(2, 7).toUpperCase();
-        }
-
-        function cleanupNetwork() {
-            if(conn) { conn.close(); conn = null; }
-            if(peer) { peer.destroy(); peer = null; }
-            isOnlineMultiplayer = false;
-        }
-
-        function hostRoom() {
-            cleanupNetwork();
-            const rawCode = generateRoomCode();
-            const fullPeerId = 'NEONTIC-' + rawCode;
-            
-            mpStatus.textContent = "Menghasilkan kode ruangan...";
-            peer = new Peer(fullPeerId);
-
-            peer.on('open', (id) => {
-                const displayCode = document.getElementById('room-code-display');
-                displayCode.textContent = rawCode;
-                displayCode.style.display = 'block';
-                mpStatus.textContent = "Menunggu lawan bergabung...";
-            });
-
-            peer.on('connection', (connection) => {
-                conn = connection;
-                myNetworkRole = 'X';
-                setupConnectionData();
-                mpStatus.textContent = "Lawan terhubung! Memulai...";
-                setTimeout(() => startGameOnline(), 1000);
-            });
-
-            peer.on('error', (err) => {
-                mpStatus.textContent = "Error: " + err.type;
-            });
-        }
-
-        function joinRoom() {
-            const inputCode = document.getElementById('join-code-input').value.toUpperCase().trim();
-            if(inputCode.length !== 5) {
-                mpStatus.textContent = "Kode ruangan harus 5 karakter!";
-                return;
-            }
-
-            cleanupNetwork();
-            mpStatus.textContent = "Menghubungkan...";
-            peer = new Peer(); // Guest gets random ID
-
-            peer.on('open', () => {
-                const targetPeerId = 'NEONTIC-' + inputCode;
-                conn = peer.connect(targetPeerId);
-                
-                conn.on('open', () => {
-                    myNetworkRole = 'O';
-                    setupConnectionData();
-                    mpStatus.textContent = "Terhubung! Memulai...";
-                    setTimeout(() => startGameOnline(), 1000);
-                });
-
-                conn.on('error', (err) => mpStatus.textContent = "Koneksi terputus.");
-            });
-
-            peer.on('error', (err) => {
-                mpStatus.textContent = "Gagal terhubung. Pastikan kode benar.";
-            });
-        }
-
-        function setupConnectionData() {
-            conn.on('data', (data) => {
-                if (data.type === 'move') {
-                    processMove(data.index, data.player);
-                } else if (data.type === 'restart') {
-                    resetBoard(false); // Reset tapi jangan kirim sinyal balik
-                }
-            });
-            conn.on('close', () => {
-                alert("Lawan terputus dari ruangan.");
-                disconnectAndGoHome();
-            });
-        }
-
-        function startGameOnline() {
-            customSymbol1 = null; customSymbol2 = null; // Pakai ikon standar X & O untuk online agar ringan
-            isOnlineMultiplayer = true;
-            roleStatus.textContent = `Kamu adalah Pemain ${myNetworkRole === 'X' ? '1 (Biru)' : '2 (Pink)'}`;
-            roleStatus.style.display = 'block';
-            showScreen(screenGame);
-            resetBoard(false);
-        }
-
-        // --- LOGIKA GAME ---
         cells.forEach(cell => cell.addEventListener('click', function() {
             const cellIndex = parseInt(this.getAttribute('data-index'));
-            
-            // Validasi langkah
             if (board[cellIndex] !== "" || !isGameRunning) return;
             
-            // Jika mode online, cek apakah ini giliran pemain jaringan yang benar
-            if (isOnlineMultiplayer && currentPlayer !== myNetworkRole) {
-                return; // Bukan giliranmu
-            }
-
-            // Jalankan langkah di lokal
             processMove(cellIndex, currentPlayer);
-
-            // Kirim langkah ke lawan jika online
-            if (isOnlineMultiplayer && conn && conn.open) {
-                conn.send({ type: 'move', index: cellIndex, player: myNetworkRole });
-            }
         }));
 
         restartBtn.addEventListener('click', () => {
-            resetBoard(true); // true = broadcast restart
+            resetBoard();
         });
 
         function processMove(index, playerNum) {
@@ -538,10 +331,7 @@
                 symbolDisplay = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
             }
             
-            // Tambahkan " (Giliranmu)" jika online
-            let extraText = (isOnlineMultiplayer && currentPlayer === myNetworkRole) ? " - Giliranmu!" : "";
-
-            statusText.innerHTML = `Giliran: ${symbolDisplay}${extraText}`;
+            statusText.innerHTML = `Giliran: ${symbolDisplay}`;
             statusText.className = (currentPlayer === "X") ? 'status-x' : 'status-o';
         }
 
@@ -559,11 +349,7 @@
                 if (currentPlayer === "X") winnerSymbol = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
                 else winnerSymbol = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
 
-                let winMsg = isOnlineMultiplayer 
-                    ? (currentPlayer === myNetworkRole ? `🎉 KAMU MENANG! 🎉` : `😭 LAWAN MENANG 😭`)
-                    : `🎉 ${winnerSymbol} MENANG! 🎉`;
-
-                statusText.innerHTML = winMsg;
+                statusText.innerHTML = `🎉 ${winnerSymbol} MENANG! 🎉`;
                 statusText.classList.add('win-text');
                 boardElement.classList.add(`win-${currentPlayer.toLowerCase()}`);
                 
@@ -574,11 +360,7 @@
             }
         }
 
-        function resetBoard(broadcast = false) {
-            if (broadcast && isOnlineMultiplayer && conn && conn.open) {
-                conn.send({ type: 'restart' });
-            }
-
+        function resetBoard() {
             currentPlayer = "X";
             board = ["", "", "", "", "", "", "", "", ""];
             movesX = []; movesO = [];
@@ -595,7 +377,7 @@
             isGameRunning = true;
         }
 
-        // --- LOGIKA MENGGAMBAR DI CANVAS (TOUCH OPTIMIZED) ---
+        // --- LOGIKA MENGGAMBAR DI CANVAS ---
         function setupCanvas(canvasId, color) {
             const canvas = document.getElementById(canvasId);
             const ctx = canvas.getContext('2d');
