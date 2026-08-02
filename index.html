@@ -89,7 +89,7 @@
         .btn-orange:hover, .btn-orange:active { background: #ff8c00; color: #0a0a0f; box-shadow: 0 0 15px #ff8c00; }
 
         input[type="text"] {
-            padding: 12px;
+            padding: 10px;
             font-size: 1.2rem;
             font-family: 'Orbitron', sans-serif;
             text-align: center;
@@ -99,9 +99,8 @@
             border: 2px solid #00f3ff;
             border-radius: 5px;
             outline: none;
-            width: 240px;
+            width: 200px;
             box-shadow: inset 0 0 10px rgba(0,243,255,0.3);
-            margin-bottom: 10px;
         }
 
         .multiplayer-box {
@@ -112,18 +111,27 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
+            gap: 15px;
             margin-bottom: 20px;
             width: 100%;
             max-width: 400px;
+        }
+
+        #room-code-display {
+            font-size: 2rem;
+            color: #ff00ff;
+            text-shadow: 0 0 15px #ff00ff;
+            letter-spacing: 5px;
+            margin: 10px 0;
+            display: none;
         }
 
         .connection-status {
             color: #ff8c00;
             font-size: 0.9rem;
             margin-top: 10px;
+            height: 20px;
             text-align: center;
-            min-height: 25px;
         }
 
         /* --- MENU GAMBAR KUSTOM --- */
@@ -220,12 +228,18 @@
         <h1>Online Mode</h1>
         
         <div class="multiplayer-box">
-            <h2 style="color: #00f3ff;">Ketik Kode Ruangan Bersama</h2>
-            <p style="font-size: 0.8rem; color: #aaa; text-align: center; margin: 0 0 10px 0;">Ketik kode yang sama persis di kedua HP (Contoh: MAEN1)</p>
-            <input type="text" id="manual-room-input" placeholder="KODE BEBAS" maxlength="10">
-            <button class="btn-orange" onclick="connectWithManualCode()">Masuk Ruangan</button>
-            <div id="mp-status" class="connection-status"></div>
+            <h2 style="color: #00f3ff;">Buat Ruangan (Host)</h2>
+            <button class="btn-blue" onclick="hostRoom()">Generate Kode</button>
+            <div id="room-code-display"></div>
         </div>
+
+        <div class="multiplayer-box">
+            <h2 style="color: #ff00ff;">Gabung Ruangan (Join)</h2>
+            <input type="text" id="join-code-input" placeholder="KODE RUANGAN" maxlength="5">
+            <button class="btn-pink" onclick="joinRoom()">Gabung</button>
+        </div>
+
+        <div id="mp-status" class="connection-status"></div>
 
         <div class="btn-group">
             <button onclick="goToMainMenu()">Kembali</button>
@@ -309,17 +323,14 @@
             [0, 4, 8], [2, 4, 6]            
         ];
 
+        // KONFIGURASI STUN SERVER GOOGLE UNTUK STABILITAS
         const peerConfig = {
-            host: '0.peerjs.com',
-            port: 443,
-            secure: true,
             config: {
                 'iceServers': [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' }
                 ]
-            },
-            debug: 1
+            }
         };
 
         // --- NAVIGASI LAYAR ---
@@ -341,7 +352,7 @@
         function goToMultiplayerMenu() { 
             cleanupNetwork(); 
             mpStatus.textContent = "";
-            document.getElementById('manual-room-input').value = "";
+            document.getElementById('room-code-display').style.display = 'none';
             showScreen(screenMultiplayer); 
         }
 
@@ -367,12 +378,20 @@
             resetBoard();
         }
 
-        // --- LOGIKA MULTIPLAYER KODE MANUAL (CERDAS: HOST ATAU GUEST OTOMATIS) ---
+        // --- MULTIPLAYER LOGIC DENGAN PEMBERSIHAN AGGRESIF ---
+        function generateRoomCode() {
+            return Math.random().toString(36).substring(2, 7).toUpperCase();
+        }
+
         function cleanupNetwork() {
-            if (conn) { conn.close(); conn = null; }
+            if (conn) { 
+                conn.close(); 
+                conn = null; 
+            }
             if (peer) { 
                 peer.disconnect(); 
-                setTimeout(() => { if(peer) { peer.destroy(); peer = null; } }, 100);
+                peer.destroy(); 
+                peer = null;
             }
             isOnlineMultiplayer = false;
             myNetworkRole = null;
@@ -382,70 +401,73 @@
             if(isOnlineMultiplayer && conn && conn.open) {
                 conn.send({ type: 'player_left' });
             }
-            setTimeout(() => {
-                cleanupNetwork();
-                goToMainMenu();
-            }, 200);
+            cleanupNetwork();
+            goToMainMenu();
         }
 
-        function connectWithManualCode() {
-            const code = document.getElementById('manual-room-input').value.toUpperCase().trim();
-            if(!code || code.length < 3) {
-                mpStatus.textContent = "Ketik minimal 3 karakter!";
-                return;
-            }
-
+        function hostRoom() {
             cleanupNetwork();
-            mpStatus.textContent = "Mencoba masuk sebagai Host...";
+            const rawCode = generateRoomCode();
+            const fullPeerId = 'NEONTIC-' + rawCode;
             
-            const hostId = 'NEONCODE-' + code + '-HOST';
-            const guestId = 'NEONCODE-' + code + '-GUEST';
-
-            // Langkah 1: Coba buat peer sebagai HOST dulu
-            peer = new Peer(hostId, peerConfig);
+            mpStatus.textContent = "Membuat ruangan...";
+            peer = new Peer(fullPeerId, peerConfig);
 
             peer.on('open', (id) => {
-                // Berhasil jadi Host! Menunggu pemain kedua masuk
-                myNetworkRole = 'X';
-                mpStatus.textContent = "Menunggu pemain kedua masuk ke kode yang sama...";
+                const displayCode = document.getElementById('room-code-display');
+                displayCode.textContent = rawCode;
+                displayCode.style.display = 'block';
+                mpStatus.textContent = "Menunggu lawan bergabung...";
+            });
 
-                peer.on('connection', (connection) => {
-                    conn = connection;
-                    conn.on('open', () => {
-                        setupConnectionData();
-                        mpStatus.textContent = "Lawan terhubung! Memulai...";
-                        setTimeout(() => startGameOnline(), 400);
-                    });
+            peer.on('connection', (connection) => {
+                if (conn) {
+                    connection.close(); 
+                    return;
+                }
+                
+                conn = connection;
+                myNetworkRole = 'X';
+                
+                conn.on('open', () => {
+                    setupConnectionData();
+                    mpStatus.textContent = "Lawan terhubung! Memulai...";
+                    setTimeout(() => startGameOnline(), 400); 
                 });
             });
 
             peer.on('error', (err) => {
-                // Jika ID Host sudah dipakai orang lain, artinya kita harus masuk sebagai GUEST!
-                if(err.type === 'unavailable-id') {
-                    mpStatus.textContent = "Host ditemukan. Menghubungkan sebagai Guest...";
-                    
-                    if(peer) peer.destroy();
-                    
-                    // Buat peer acak untuk guest
-                    peer = new Peer(peerConfig);
+                mpStatus.textContent = "Error Jaringan. Coba lagi.";
+            });
+        }
 
-                    peer.on('open', () => {
-                        conn = peer.connect(hostId, { reliable: true });
+        function joinRoom() {
+            const inputCode = document.getElementById('join-code-input').value.toUpperCase().trim();
+            if(inputCode.length !== 5) {
+                mpStatus.textContent = "Kode ruangan harus 5 karakter!";
+                return;
+            }
 
-                        conn.on('open', () => {
-                            myNetworkRole = 'O';
-                            setupConnectionData();
-                            mpStatus.textContent = "Berhasil Terhubung! Memulai...";
-                            setTimeout(() => startGameOnline(), 400);
-                        });
+            cleanupNetwork();
+            mpStatus.textContent = "Menghubungkan...";
+            peer = new Peer(peerConfig); 
 
-                        conn.on('error', () => {
-                            mpStatus.textContent = "Gagal terhubung ke Host.";
-                        });
-                    });
-                } else {
-                    mpStatus.textContent = "Error jaringan: " + err.type;
-                }
+            peer.on('open', () => {
+                const targetPeerId = 'NEONTIC-' + inputCode;
+                conn = peer.connect(targetPeerId, { reliable: true });
+                
+                conn.on('open', () => {
+                    myNetworkRole = 'O';
+                    setupConnectionData();
+                    mpStatus.textContent = "Terhubung! Memulai...";
+                    setTimeout(() => startGameOnline(), 400);
+                });
+
+                conn.on('error', (err) => mpStatus.textContent = "Gagal terhubung ke host.");
+            });
+
+            peer.on('error', (err) => {
+                mpStatus.textContent = "Gagal inisialisasi jaringan.";
             });
         }
 
@@ -463,7 +485,7 @@
 
             conn.on('close', () => {
                 if (isOnlineMultiplayer) {
-                    alert("Koneksi terputus tiba-tiba.");
+                    alert("Koneksi terputus.");
                     disconnectAndGoHome();
                 }
             });
@@ -472,7 +494,7 @@
         function startGameOnline() {
             customSymbol1 = null; customSymbol2 = null; 
             isOnlineMultiplayer = true;
-            roleStatus.textContent = `Kamu adalah Pemain ${myNetworkRole === 'X' ? '1 (Biru - Host)' : '2 (Pink - Guest)'}`;
+            roleStatus.textContent = `Kamu adalah Pemain ${myNetworkRole === 'X' ? '1 (Biru)' : '2 (Pink)'}`;
             roleStatus.style.display = 'block';
             showScreen(screenGame);
             resetBoard(false);
@@ -607,10 +629,7 @@
             });
             
             updateStatusText();
-            
-            setTimeout(() => {
-                isGameRunning = true;
-            }, 100);
+            setTimeout(() => { isGameRunning = true; }, 100);
         }
 
         // --- LOGIKA MENGGAMBAR DI CANVAS ---
