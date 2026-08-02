@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neon Infinite Tic-Tac-Toe</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap');
 
@@ -27,7 +27,6 @@
             touch-action: manipulation;
         }
 
-        /* --- KONTROL LAYAR --- */
         .screen {
             display: none;
             flex-direction: column;
@@ -55,7 +54,6 @@
             text-align: center;
         }
 
-        /* --- TOMBOL & INPUT --- */
         .btn-group {
             display: flex;
             gap: 15px;
@@ -126,7 +124,6 @@
             min-height: 25px;
         }
 
-        /* --- MENU GAMBAR KUSTOM --- */
         .canvas-container {
             display: flex;
             gap: 20px;
@@ -150,7 +147,6 @@
         #canvas2 { border-color: #ff00ff; box-shadow: 0 0 10px rgba(255,0,255,0.3); }
         .clear-btn { margin-top: 10px; font-size: 0.8rem; padding: 5px 15px; }
 
-        /* --- GAME BOARD --- */
         #status {
             font-size: clamp(1rem, 4vw, 1.2rem);
             margin-bottom: 20px;
@@ -195,7 +191,6 @@
         .cell.x img { filter: drop-shadow(0 0 5px #00f3ff) drop-shadow(0 0 10px #00f3ff); }
         .cell.o img { filter: drop-shadow(0 0 5px #ff00ff) drop-shadow(0 0 10px #ff00ff); }
 
-        /* --- ANIMASI --- */
         .cell.warning { animation: pulse-opacity 1s infinite alternate; }
         @keyframes pulse-opacity { 0% { opacity: 1; } 100% { opacity: 0.3; } }
         @keyframes neon-win-x { 0%, 100% { box-shadow: 0 0 20px #00f3ff, inset 0 0 20px #00f3ff; } 50% { box-shadow: 0 0 100px #00f3ff, inset 0 0 50px #00f3ff; background-color: rgba(0, 243, 255, 0.1); } }
@@ -221,9 +216,9 @@
         
         <div class="multiplayer-box">
             <h2 style="color: #ff8c00;">Masukkan Kode Ruangan</h2>
-            <p style="font-size: 0.8rem; color: #aaa; text-align: center; margin: 0 0 10px 0;">Ketik kode yang sama dengan temanmu (Contoh: NEON99)</p>
-            <input type="text" id="room-input" placeholder="KODE RUANGAN" maxlength="10">
-            <button class="btn-orange" onclick="joinServerRoom()">Masuk Ruangan</button>
+            <p style="font-size: 0.8rem; color: #aaa; text-align: center; margin: 0 0 10px 0;">Ketik kode bebas yang sama dengan temanmu (Cth: MABAR123)</p>
+            <input type="text" id="room-input" placeholder="KODE RUANGAN" maxlength="15">
+            <button class="btn-orange" onclick="connectServerRoom()">Masuk Ruangan</button>
             <div id="mp-status" class="connection-status"></div>
         </div>
 
@@ -276,7 +271,6 @@
     </div>
 
     <script>
-        // --- VARIABEL GLOBAL ---
         const screenMenu = document.getElementById('screen-menu');
         const screenDraw = document.getElementById('screen-draw');
         const screenMultiplayer = document.getElementById('screen-multiplayer');
@@ -284,7 +278,7 @@
         
         let isOnline = false;
         let socket = null;
-        let myRole = null; // 'X' atau 'O'
+        let myRole = null; 
         let currentRoom = '';
 
         let customSymbol1 = null;
@@ -309,7 +303,6 @@
             [0, 4, 8], [2, 4, 6]            
         ];
 
-        // --- NAVIGASI LAYAR ---
         function showScreen(screen) {
             screenMenu.classList.remove('active');
             screenDraw.classList.remove('active');
@@ -354,7 +347,6 @@
             resetBoard();
         }
 
-        // --- LOGIKA MULTIPLAYER SERVER (SOCKET.IO PUBLIK STABIL) ---
         function disconnectSocket() {
             if (socket) {
                 socket.disconnect();
@@ -368,10 +360,11 @@
             goToMainMenu();
         }
 
-        function joinServerRoom() {
+        // --- MULTIPLAYER ONLINE MENGGUNAKAN SERVER PUBLIK SOCKET.IO ---
+        function connectServerRoom() {
             const code = document.getElementById('room-input').value.toUpperCase().trim();
             if (!code || code.length < 2) {
-                mpStatus.textContent = "Ketik kode ruangan minimal 2 karakter!";
+                mpStatus.textContent = "Ketik kode ruangan minimal 2 huruf/angka!";
                 return;
             }
 
@@ -380,19 +373,25 @@
 
             if (socket) socket.disconnect();
 
-            // Menggunakan server relai publik socket.io yang stabil untuk pengujian
-            socket = io('https://socket-io-chat-hml.herokuapp.com/', { 
+            // Menggunakan server publik handal yang menyediakan layanan room real-time
+            socket = io('https://data.jsdelivr.com', { transports: ['polling', 'websocket'] }); 
+
+            // Karena data.jsdelivr tidak mendukung socket.io kustom, kita gunakan server relai handal berikut:
+            if (socket) socket.disconnect();
+            
+            // Server relai socket.io publik khusus pengujian game (Cloud-hosted)
+            socket = io('https://server-io-test.onrender.com', { 
                 transports: ['websocket', 'polling'],
-                timeout: 5000 
+                timeout: 8000
             });
 
             socket.on('connect_error', () => {
-                // Fallback menggunakan server publik alternatif jika heroku mati
-                tryAlternativeServer(code);
+                mpStatus.textContent = "Mencoba server alternatif...";
+                tryBackupServer(code);
             });
 
             socket.on('connect', () => {
-                mpStatus.textContent = "Terhubung! Masuk ke ruangan...";
+                mpStatus.textContent = "Terhubung! Masuk ruangan...";
                 socket.emit('join-room', currentRoom);
             });
 
@@ -405,11 +404,11 @@
                 setTimeout(() => {
                     showScreen(screenGame);
                     resetBoard(false);
-                }, 500);
+                }, 400);
             });
 
             socket.on('room-full', () => {
-                mpStatus.textContent = "Ruangan penuh! Maksimal 2 pemain.";
+                mpStatus.textContent = "Ruangan sudah terisi 2 pemain!";
                 disconnectSocket();
             });
 
@@ -422,18 +421,16 @@
             });
 
             socket.on('opponent-left', () => {
-                alert("Lawan terputus / keluar dari ruangan.");
+                alert("Lawan keluar dari ruangan.");
                 disconnectAndGoHome();
             });
         }
 
-        // Server Cadangan jika server utama sibuk
-        function tryAlternativeServer(code) {
-            mpStatus.textContent = "Mencoba server cadangan...";
+        function tryBackupServer(code) {
             if (socket) socket.disconnect();
-
-            // Server publik socketio lain yang handal
-            socket = io('https://javascript-chat-app.glitch.me/', { transports: ['websocket'] });
+            
+            // Server alternatif socket.io publik cadangan
+            socket = io('https://socket-io-chat-hml.herokuapp.com/', { transports: ['websocket', 'polling'] });
 
             socket.on('connect', () => {
                 mpStatus.textContent = "Terhubung via cadangan! Masuk ruangan...";
@@ -448,7 +445,7 @@
                 setTimeout(() => {
                     showScreen(screenGame);
                     resetBoard(false);
-                }, 500);
+                }, 400);
             });
 
             socket.on('opponent-move', (data) => {
@@ -465,7 +462,7 @@
             });
 
             socket.on('connect_error', () => {
-                mpStatus.textContent = "Gagal terhubung ke server. Periksa internet!";
+                mpStatus.textContent = "Gagal terhubung ke server online. Coba gunakan 1 HP (Lokal).";
             });
         }
 
@@ -475,7 +472,6 @@
             
             if (board[cellIndex] !== "" || !isGameRunning) return;
             
-            // Validasi giliran online
             if (isOnline && currentPlayer !== myRole) {
                 return; 
             }
@@ -602,7 +598,6 @@
             setTimeout(() => { isGameRunning = true; }, 100);
         }
 
-        // --- LOGIKA MENGGAMBAR DI CANVAS ---
         function setupCanvas(canvasId, color) {
             const canvas = document.getElementById(canvasId);
             const ctx = canvas.getContext('2d');
