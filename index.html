@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neon Infinite Tic-Tac-Toe</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap');
 
@@ -27,6 +26,7 @@
             touch-action: manipulation;
         }
 
+        /* --- KONTROL LAYAR --- */
         .screen {
             display: none;
             flex-direction: column;
@@ -54,6 +54,7 @@
             text-align: center;
         }
 
+        /* --- TOMBOL --- */
         .btn-group {
             display: flex;
             gap: 15px;
@@ -82,48 +83,8 @@
 
         .btn-pink { border-color: #ff00ff; color: #ff00ff; }
         .btn-pink:hover, .btn-pink:active { background: #ff00ff; color: #0a0a0f; box-shadow: 0 0 15px #ff00ff; }
-        
-        .btn-orange { border-color: #ff8c00; color: #ff8c00; }
-        .btn-orange:hover, .btn-orange:active { background: #ff8c00; color: #0a0a0f; box-shadow: 0 0 15px #ff8c00; }
 
-        input[type="text"] {
-            padding: 12px;
-            font-size: 1.2rem;
-            font-family: 'Orbitron', sans-serif;
-            text-align: center;
-            text-transform: uppercase;
-            background: #12121a;
-            color: #00f3ff;
-            border: 2px solid #00f3ff;
-            border-radius: 5px;
-            outline: none;
-            width: 240px;
-            box-shadow: inset 0 0 10px rgba(0,243,255,0.3);
-            margin-bottom: 10px;
-        }
-
-        .multiplayer-box {
-            background: #12121a;
-            padding: 20px;
-            border: 2px solid #333;
-            border-radius: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px;
-            width: 100%;
-            max-width: 400px;
-        }
-
-        .connection-status {
-            color: #ff8c00;
-            font-size: 0.9rem;
-            margin-top: 10px;
-            text-align: center;
-            min-height: 25px;
-        }
-
+        /* --- MENU GAMBAR KUSTOM --- */
         .canvas-container {
             display: flex;
             gap: 20px;
@@ -147,6 +108,7 @@
         #canvas2 { border-color: #ff00ff; box-shadow: 0 0 10px rgba(255,0,255,0.3); }
         .clear-btn { margin-top: 10px; font-size: 0.8rem; padding: 5px 15px; }
 
+        /* --- GAME BOARD --- */
         #status {
             font-size: clamp(1rem, 4vw, 1.2rem);
             margin-bottom: 20px;
@@ -191,6 +153,7 @@
         .cell.x img { filter: drop-shadow(0 0 5px #00f3ff) drop-shadow(0 0 10px #00f3ff); }
         .cell.o img { filter: drop-shadow(0 0 5px #ff00ff) drop-shadow(0 0 10px #ff00ff); }
 
+        /* --- ANIMASI --- */
         .cell.warning { animation: pulse-opacity 1s infinite alternate; }
         @keyframes pulse-opacity { 0% { opacity: 1; } 100% { opacity: 0.3; } }
         @keyframes neon-win-x { 0%, 100% { box-shadow: 0 0 20px #00f3ff, inset 0 0 20px #00f3ff; } 50% { box-shadow: 0 0 100px #00f3ff, inset 0 0 50px #00f3ff; background-color: rgba(0, 243, 255, 0.1); } }
@@ -205,25 +168,8 @@
     <div id="screen-menu" class="screen active">
         <h1>Infinite<br>Tic-Tac-Toe</h1>
         <div class="btn-group" style="flex-direction: column; align-items: center;">
-            <button class="btn-blue" onclick="startLocalStandard()">Lokal: 1 HP (Standar)</button>
-            <button class="btn-pink" onclick="goToDrawMenu()">Lokal: Kustom Karakter</button>
-            <button class="btn-orange" onclick="goToMultiplayerMenu()">Multiplayer Online (2 HP)</button>
-        </div>
-    </div>
-
-    <div id="screen-multiplayer" class="screen">
-        <h1>Online Mode</h1>
-        
-        <div class="multiplayer-box">
-            <h2 style="color: #ff8c00;">Masukkan Kode Ruangan</h2>
-            <p style="font-size: 0.8rem; color: #aaa; text-align: center; margin: 0 0 10px 0;">Ketik kode bebas yang sama dengan temanmu (Cth: MABAR123)</p>
-            <input type="text" id="room-input" placeholder="KODE RUANGAN" maxlength="15">
-            <button class="btn-orange" onclick="connectServerRoom()">Masuk Ruangan</button>
-            <div id="mp-status" class="connection-status"></div>
-        </div>
-
-        <div class="btn-group">
-            <button onclick="goToMainMenu()">Kembali</button>
+            <button class="btn-blue" onclick="startLocalStandard()">Mulai Game (Standar)</button>
+            <button class="btn-pink" onclick="goToDrawMenu()">Kustom Karakter (2 Pemain)</button>
         </div>
     </div>
 
@@ -242,14 +188,13 @@
             </div>
         </div>
         <div class="btn-group">
-            <button onclick="saveAndStartLocal()">Simpan & Mulai</button>
+            <button onclick="saveAndStart()">Simpan & Mulai</button>
             <button onclick="goToMainMenu()">Kembali</button>
         </div>
     </div>
 
     <div id="screen-game" class="screen">
         <h1>Infinite Tic-Tac-Toe</h1>
-        <div id="network-role-status" style="font-size: 0.8rem; color: #aaa; margin-bottom: 5px; display: none;"></div>
         <div id="status" class="status-x">Giliran: Pemain 1</div>
 
         <div class="board">
@@ -266,20 +211,14 @@
 
         <div class="btn-group">
             <button id="restartBtn">Main Lagi</button>
-            <button onclick="disconnectAndGoHome()">Keluar</button>
+            <button onclick="goToMainMenu()">Menu Utama</button>
         </div>
     </div>
 
     <script>
         const screenMenu = document.getElementById('screen-menu');
         const screenDraw = document.getElementById('screen-draw');
-        const screenMultiplayer = document.getElementById('screen-multiplayer');
         const screenGame = document.getElementById('screen-game');
-        
-        let isOnline = false;
-        let socket = null;
-        let myRole = null; 
-        let currentRoom = '';
 
         let customSymbol1 = null;
         let customSymbol2 = null;
@@ -288,8 +227,6 @@
         const statusText = document.getElementById('status');
         const restartBtn = document.getElementById('restartBtn');
         const boardElement = document.querySelector('.board');
-        const mpStatus = document.getElementById('mp-status');
-        const roleStatus = document.getElementById('network-role-status');
 
         let board = ["", "", "", "", "", "", "", "", ""];
         let currentPlayer = "X";
@@ -306,185 +243,40 @@
         function showScreen(screen) {
             screenMenu.classList.remove('active');
             screenDraw.classList.remove('active');
-            screenMultiplayer.classList.remove('active');
             screenGame.classList.remove('active');
             screen.classList.add('active');
         }
 
-        function goToMainMenu() { 
-            disconnectSocket();
-            showScreen(screenMenu); 
-        }
-
+        function goToMainMenu() { showScreen(screenMenu); }
         function goToDrawMenu() { showScreen(screenDraw); }
 
-        function goToMultiplayerMenu() { 
-            disconnectSocket();
-            mpStatus.textContent = "";
-            document.getElementById('room-input').value = "";
-            showScreen(screenMultiplayer); 
-        }
-
         function startLocalStandard() {
-            customSymbol1 = null; customSymbol2 = null;
-            clearCanvas(1); clearCanvas(2);
-            isOnline = false;
-            myRole = null;
-            roleStatus.style.display = 'none';
+            customSymbol1 = null; 
+            customSymbol2 = null;
+            clearCanvas(1); 
+            clearCanvas(2);
             showScreen(screenGame);
             resetBoard();
         }
 
-        function saveAndStartLocal() {
+        function saveAndStart() {
             const c1 = document.getElementById('canvas1');
             const c2 = document.getElementById('canvas2');
             customSymbol1 = isCanvasEmpty(c1) ? null : c1.toDataURL();
             customSymbol2 = isCanvasEmpty(c2) ? null : c2.toDataURL();
-            isOnline = false;
-            myRole = null;
-            roleStatus.style.display = 'none';
             showScreen(screenGame);
             resetBoard();
         }
 
-        function disconnectSocket() {
-            if (socket) {
-                socket.disconnect();
-                socket = null;
-            }
-            isOnline = false;
-        }
-
-        function disconnectAndGoHome() {
-            disconnectSocket();
-            goToMainMenu();
-        }
-
-        // --- MULTIPLAYER ONLINE MENGGUNAKAN SERVER PUBLIK SOCKET.IO ---
-        function connectServerRoom() {
-            const code = document.getElementById('room-input').value.toUpperCase().trim();
-            if (!code || code.length < 2) {
-                mpStatus.textContent = "Ketik kode ruangan minimal 2 huruf/angka!";
-                return;
-            }
-
-            mpStatus.textContent = "Menghubungkan ke server...";
-            currentRoom = code;
-
-            if (socket) socket.disconnect();
-
-            // Menggunakan server publik handal yang menyediakan layanan room real-time
-            socket = io('https://data.jsdelivr.com', { transports: ['polling', 'websocket'] }); 
-
-            // Karena data.jsdelivr tidak mendukung socket.io kustom, kita gunakan server relai handal berikut:
-            if (socket) socket.disconnect();
-            
-            // Server relai socket.io publik khusus pengujian game (Cloud-hosted)
-            socket = io('https://server-io-test.onrender.com', { 
-                transports: ['websocket', 'polling'],
-                timeout: 8000
-            });
-
-            socket.on('connect_error', () => {
-                mpStatus.textContent = "Mencoba server alternatif...";
-                tryBackupServer(code);
-            });
-
-            socket.on('connect', () => {
-                mpStatus.textContent = "Terhubung! Masuk ruangan...";
-                socket.emit('join-room', currentRoom);
-            });
-
-            socket.on('assigned-role', (role) => {
-                myRole = role; // 'X' atau 'O'
-                isOnline = true;
-                roleStatus.textContent = `Kamu adalah Pemain ${myRole === 'X' ? '1 (Biru - X)' : '2 (Pink - O)'}`;
-                roleStatus.style.display = 'block';
-                mpStatus.textContent = "Lawan ditemukan! Memulai game...";
-                setTimeout(() => {
-                    showScreen(screenGame);
-                    resetBoard(false);
-                }, 400);
-            });
-
-            socket.on('room-full', () => {
-                mpStatus.textContent = "Ruangan sudah terisi 2 pemain!";
-                disconnectSocket();
-            });
-
-            socket.on('opponent-move', (data) => {
-                processMove(data.index, data.player);
-            });
-
-            socket.on('opponent-restart', () => {
-                resetBoard(false);
-            });
-
-            socket.on('opponent-left', () => {
-                alert("Lawan keluar dari ruangan.");
-                disconnectAndGoHome();
-            });
-        }
-
-        function tryBackupServer(code) {
-            if (socket) socket.disconnect();
-            
-            // Server alternatif socket.io publik cadangan
-            socket = io('https://socket-io-chat-hml.herokuapp.com/', { transports: ['websocket', 'polling'] });
-
-            socket.on('connect', () => {
-                mpStatus.textContent = "Terhubung via cadangan! Masuk ruangan...";
-                socket.emit('join-room', code);
-            });
-
-            socket.on('assigned-role', (role) => {
-                myRole = role;
-                isOnline = true;
-                roleStatus.textContent = `Kamu adalah Pemain ${myRole === 'X' ? '1 (Biru - X)' : '2 (Pink - O)'}`;
-                roleStatus.style.display = 'block';
-                setTimeout(() => {
-                    showScreen(screenGame);
-                    resetBoard(false);
-                }, 400);
-            });
-
-            socket.on('opponent-move', (data) => {
-                processMove(data.index, data.player);
-            });
-
-            socket.on('opponent-restart', () => {
-                resetBoard(false);
-            });
-
-            socket.on('opponent-left', () => {
-                alert("Lawan keluar.");
-                disconnectAndGoHome();
-            });
-
-            socket.on('connect_error', () => {
-                mpStatus.textContent = "Gagal terhubung ke server online. Coba gunakan 1 HP (Lokal).";
-            });
-        }
-
-        // --- LOGIKA GAME UTAMA ---
         cells.forEach(cell => cell.addEventListener('click', function() {
             const cellIndex = parseInt(this.getAttribute('data-index'));
-            
             if (board[cellIndex] !== "" || !isGameRunning) return;
             
-            if (isOnline && currentPlayer !== myRole) {
-                return; 
-            }
-
             processMove(cellIndex, currentPlayer);
-
-            if (isOnline && socket) {
-                socket.emit('player-move', { room: currentRoom, index: cellIndex, player: myRole });
-            }
         }));
 
         restartBtn.addEventListener('click', () => {
-            resetBoard(true);
+            resetBoard();
         });
 
         function processMove(index, playerNum) {
@@ -539,12 +331,7 @@
                 symbolDisplay = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
             }
             
-            let extraText = "";
-            if (isOnline) {
-                extraText = (currentPlayer === myRole) ? " - Giliranmu!" : " - Menunggu Lawan...";
-            }
-
-            statusText.innerHTML = `Giliran: ${symbolDisplay}${extraText}`;
+            statusText.innerHTML = `Giliran: ${symbolDisplay}`;
             statusText.className = (currentPlayer === "X") ? 'status-x' : 'status-o';
         }
 
@@ -562,11 +349,7 @@
                 if (currentPlayer === "X") winnerSymbol = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
                 else winnerSymbol = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
 
-                let winMsg = isOnline 
-                    ? (currentPlayer === myRole ? `🎉 KAMU MENANG! 🎉` : `😭 LAWAN MENANG 😭`)
-                    : `🎉 ${winnerSymbol} MENANG! 🎉`;
-
-                statusText.innerHTML = winMsg;
+                statusText.innerHTML = `🎉 ${winnerSymbol} MENANG! 🎉`;
                 statusText.classList.add('win-text');
                 boardElement.classList.add(`win-${currentPlayer.toLowerCase()}`);
                 
@@ -577,11 +360,7 @@
             }
         }
 
-        function resetBoard(broadcast = false) {
-            if (broadcast && isOnline && socket) {
-                socket.emit('player-restart', { room: currentRoom });
-            }
-
+        function resetBoard() {
             currentPlayer = "X";
             board = ["", "", "", "", "", "", "", "", ""];
             movesX = []; movesO = [];
@@ -595,7 +374,7 @@
             });
             
             updateStatusText();
-            setTimeout(() => { isGameRunning = true; }, 100);
+            isGameRunning = true;
         }
 
         function setupCanvas(canvasId, color) {
