@@ -1,667 +1,394 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Neon Infinite Tic-Tac-Toe</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap');
+// --- VARIABEL GLOBAL ---
+const screenMenu = document.getElementById('screen-menu');
+const screenDraw = document.getElementById('screen-draw');
+const screenMultiplayer = document.getElementById('screen-multiplayer');
+const screenGame = document.getElementById('screen-game');
 
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent; 
+let isOnlineMultiplayer = false;
+let myNetworkRole = null; 
+let peer = null;
+let conn = null;
+
+let customSymbol1 = null;
+let customSymbol2 = null;
+
+const cells = document.querySelectorAll('.cell');
+const statusText = document.getElementById('status');
+const restartBtn = document.getElementById('restartBtn');
+const boardElement = document.querySelector('.board');
+const mpStatus = document.getElementById('mp-status');
+const roleStatus = document.getElementById('network-role-status');
+
+let board = ["", "", "", "", "", "", "", "", ""];
+let currentPlayer = "X";
+let isGameRunning = false;
+let movesX = [];
+let movesO = [];
+
+const winConditions = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6]            
+];
+
+// KONFIGURASI STUN SERVER
+const peerConfig = {
+    config: {
+        'iceServers': [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    }
+};
+
+// --- NAVIGASI LAYAR ---
+function showScreen(screen) {
+    screenMenu.classList.remove('active');
+    screenDraw.classList.remove('active');
+    screenMultiplayer.classList.remove('active');
+    screenGame.classList.remove('active');
+    screen.classList.add('active');
+}
+
+function goToMainMenu() { 
+    cleanupNetwork();
+    showScreen(screenMenu); 
+}
+
+function goToDrawMenu() { showScreen(screenDraw); }
+
+function goToMultiplayerMenu() { 
+    cleanupNetwork(); // Selalu pastikan bersih saat masuk menu MP
+    mpStatus.textContent = "";
+    document.getElementById('room-code-display').style.display = 'none';
+    showScreen(screenMultiplayer); 
+}
+
+function startLocalStandard() {
+    customSymbol1 = null; customSymbol2 = null;
+    clearCanvas(1); clearCanvas(2);
+    isOnlineMultiplayer = false;
+    myNetworkRole = null;
+    roleStatus.style.display = 'none';
+    showScreen(screenGame);
+    resetBoard();
+}
+
+function saveAndStartLocal() {
+    const c1 = document.getElementById('canvas1');
+    const c2 = document.getElementById('canvas2');
+    customSymbol1 = isCanvasEmpty(c1) ? null : c1.toDataURL();
+    customSymbol2 = isCanvasEmpty(c2) ? null : c2.toDataURL();
+    isOnlineMultiplayer = false;
+    myNetworkRole = null;
+    roleStatus.style.display = 'none';
+    showScreen(screenGame);
+    resetBoard();
+}
+
+// --- MULTIPLAYER LOGIC (PEERJS) PERBAIKAN ---
+function generateRoomCode() {
+    return Math.random().toString(36).substring(2, 7).toUpperCase();
+}
+
+function cleanupNetwork() {
+    // Putus koneksi secara agresif agar tidak jadi zombie
+    if (conn) { 
+        conn.close(); 
+        conn = null; 
+    }
+    if (peer) { 
+        peer.disconnect(); // Putus dari server
+        setTimeout(() => {
+            if(peer) {
+                peer.destroy(); // Hancurkan semua WebRTC
+                peer = null;
+            }
+        }, 100);
+    }
+    isOnlineMultiplayer = false;
+    myNetworkRole = null;
+}
+
+function disconnectAndGoHome() {
+    if(isOnlineMultiplayer && conn && conn.open) {
+        conn.send({ type: 'player_left' });
+    }
+    setTimeout(() => {
+        cleanupNetwork();
+        goToMainMenu();
+    }, 200);
+}
+
+function hostRoom() {
+    cleanupNetwork();
+    const rawCode = generateRoomCode();
+    const fullPeerId = 'NEONTIC-' + rawCode;
+    
+    mpStatus.textContent = "Menyiapkan ruangan...";
+    peer = new Peer(fullPeerId, peerConfig);
+
+    peer.on('open', (id) => {
+        const displayCode = document.getElementById('room-code-display');
+        displayCode.textContent = rawCode;
+        displayCode.style.display = 'block';
+        mpStatus.textContent = "Menunggu lawan bergabung...";
+    });
+
+    peer.on('connection', (connection) => {
+        if (conn) {
+            connection.close(); // Tolak pemain ke-3 jika room penuh
+            return;
         }
-
-        body {
-            background-color: #0a0a0f;
-            color: #ffffff;
-            font-family: 'Orbitron', sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            overflow: hidden;
-            touch-action: manipulation;
-        }
-
-        /* --- KONTROL LAYAR --- */
-        .screen {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
-            padding: 20px;
-        }
-
-        .screen.active {
-            display: flex;
-        }
-
-        h1 {
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            text-shadow: 0 0 10px #ffffff;
-            margin-bottom: 20px;
-            text-align: center;
-            font-size: clamp(1.5rem, 5vw, 2.5rem);
-        }
-
-        h2 {
-            font-size: 1.2rem;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-
-        /* --- TOMBOL & INPUT --- */
-        .btn-group {
-            display: flex;
-            gap: 15px;
-            margin-top: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        button {
-            padding: 10px 20px;
-            font-size: 1rem;
-            font-family: 'Orbitron', sans-serif;
-            background: transparent;
-            color: #fff;
-            border: 2px solid #fff;
-            border-radius: 5px;
-            cursor: pointer;
-            text-transform: uppercase;
-            transition: all 0.3s ease;
-        }
-
-        button:hover, button:active { background: #fff; color: #0a0a0f; box-shadow: 0 0 15px #fff; }
         
-        .btn-blue { border-color: #00f3ff; color: #00f3ff; }
-        .btn-blue:hover, .btn-blue:active { background: #00f3ff; color: #0a0a0f; box-shadow: 0 0 15px #00f3ff; }
-
-        .btn-pink { border-color: #ff00ff; color: #ff00ff; }
-        .btn-pink:hover, .btn-pink:active { background: #ff00ff; color: #0a0a0f; box-shadow: 0 0 15px #ff00ff; }
+        conn = connection;
+        myNetworkRole = 'X';
         
-        .btn-orange { border-color: #ff8c00; color: #ff8c00; }
-        .btn-orange:hover, .btn-orange:active { background: #ff8c00; color: #0a0a0f; box-shadow: 0 0 15px #ff8c00; }
+        conn.on('open', () => {
+            setupConnectionData();
+            mpStatus.textContent = "Lawan terhubung! Memulai permainan...";
+            setTimeout(() => startGameOnline(), 500); 
+        });
+    });
 
-        input[type="text"] {
-            padding: 10px;
-            font-size: 1.2rem;
-            font-family: 'Orbitron', sans-serif;
-            text-align: center;
-            text-transform: uppercase;
-            background: #12121a;
-            color: #00f3ff;
-            border: 2px solid #00f3ff;
-            border-radius: 5px;
-            outline: none;
-            width: 200px;
-            box-shadow: inset 0 0 10px rgba(0,243,255,0.3);
-        }
+    peer.on('error', (err) => {
+        mpStatus.textContent = "Error: Terjadi kesalahan jaringan.";
+        console.error(err);
+    });
+}
 
-        .multiplayer-box {
-            background: #12121a;
-            padding: 20px;
-            border: 2px solid #333;
-            border-radius: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-            width: 100%;
-            max-width: 400px;
-        }
+function joinRoom() {
+    const inputCode = document.getElementById('join-code-input').value.toUpperCase().trim();
+    if(inputCode.length !== 5) {
+        mpStatus.textContent = "Kode ruangan harus 5 karakter!";
+        return;
+    }
 
-        #room-code-display {
-            font-size: 2rem;
-            color: #ff00ff;
-            text-shadow: 0 0 15px #ff00ff;
-            letter-spacing: 5px;
-            margin: 10px 0;
-            display: none;
-        }
+    cleanupNetwork();
+    mpStatus.textContent = "Menghubungkan ke Host...";
+    peer = new Peer(peerConfig); 
 
-        .connection-status {
-            color: #ff8c00;
-            font-size: 0.9rem;
-            margin-top: 10px;
-            height: 20px;
-            text-align: center;
-        }
-
-        /* --- MENU GAMBAR KUSTOM --- */
-        .canvas-container {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .canvas-box { display: flex; flex-direction: column; align-items: center; }
-
-        canvas {
-            background-color: #12121a;
-            border: 2px solid #333;
-            border-radius: 10px;
-            cursor: crosshair;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
-            touch-action: none; 
-        }
-
-        #canvas1 { border-color: #00f3ff; box-shadow: 0 0 10px rgba(0,243,255,0.3); }
-        #canvas2 { border-color: #ff00ff; box-shadow: 0 0 10px rgba(255,0,255,0.3); }
-        .clear-btn { margin-top: 10px; font-size: 0.8rem; padding: 5px 15px; }
-
-        /* --- GAME BOARD --- */
-        #status {
-            font-size: clamp(1rem, 4vw, 1.2rem);
-            margin-bottom: 20px;
-            letter-spacing: 1px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            text-align: center;
-            min-height: 30px;
-        }
-
-        #status img { height: 1.5em; vertical-align: middle; }
-        .status-x { color: #00f3ff; text-shadow: 0 0 10px #00f3ff; }
-        .status-o { color: #ff00ff; text-shadow: 0 0 10px #ff00ff; }
-        .status-x img { filter: drop-shadow(0 0 5px #00f3ff) drop-shadow(0 0 10px #00f3ff); }
-        .status-o img { filter: drop-shadow(0 0 5px #ff00ff) drop-shadow(0 0 10px #ff00ff); }
-
-        .board {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: clamp(5px, 2vw, 10px);
-            width: 90vw; max-width: 400px;
-            aspect-ratio: 1 / 1;
-            margin-bottom: 30px;
-            transition: all 0.3s ease;
-        }
-
-        .cell {
-            width: 100%; height: 100%;
-            background-color: #12121a; border: 2px solid #333; border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: clamp(2.5rem, 10vw, 4rem);
-            cursor: pointer; transition: all 0.3s ease;
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
-        }
-        .cell:hover { background-color: #1a1a2e; }
-
-        .cell.x { color: #00f3ff; border-color: #00f3ff; text-shadow: 0 0 15px #00f3ff, 0 0 30px #00f3ff; box-shadow: 0 0 15px rgba(0, 243, 255, 0.4), inset 0 0 15px rgba(0, 243, 255, 0.2); }
-        .cell.o { color: #ff00ff; border-color: #ff00ff; text-shadow: 0 0 15px #ff00ff, 0 0 30px #ff00ff; box-shadow: 0 0 15px rgba(255, 0, 255, 0.4), inset 0 0 15px rgba(255, 0, 255, 0.2); }
-        .cell img { width: 80%; height: 80%; object-fit: contain; }
-        .cell.x img { filter: drop-shadow(0 0 5px #00f3ff) drop-shadow(0 0 10px #00f3ff); }
-        .cell.o img { filter: drop-shadow(0 0 5px #ff00ff) drop-shadow(0 0 10px #ff00ff); }
-
-        /* --- ANIMASI --- */
-        .cell.warning { animation: pulse-opacity 1s infinite alternate; }
-        @keyframes pulse-opacity { 0% { opacity: 1; } 100% { opacity: 0.3; } }
-        @keyframes neon-win-x { 0%, 100% { box-shadow: 0 0 20px #00f3ff, inset 0 0 20px #00f3ff; } 50% { box-shadow: 0 0 100px #00f3ff, inset 0 0 50px #00f3ff; background-color: rgba(0, 243, 255, 0.1); } }
-        @keyframes neon-win-o { 0%, 100% { box-shadow: 0 0 20px #ff00ff, inset 0 0 20px #ff00ff; } 50% { box-shadow: 0 0 100px #ff00ff, inset 0 0 50px #ff00ff; background-color: rgba(255, 0, 255, 0.1); } }
-        .board.win-x { animation: neon-win-x 0.8s ease infinite; border-radius: 10px; }
-        .board.win-o { animation: neon-win-o 0.8s ease infinite; border-radius: 10px; }
-        #status.win-text { font-size: clamp(1.5rem, 6vw, 2rem); animation: pulse-opacity 0.5s infinite alternate; }
-    </style>
-</head>
-<body>
-
-    <div id="screen-menu" class="screen active">
-        <h1>Infinite<br>Tic-Tac-Toe</h1>
-        <div class="btn-group" style="flex-direction: column; align-items: center;">
-            <button class="btn-blue" onclick="startLocalStandard()">Lokal: Standar</button>
-            <button class="btn-pink" onclick="goToDrawMenu()">Lokal: Kustom Karakter</button>
-            <button class="btn-orange" onclick="goToMultiplayerMenu()">Multiplayer Online</button>
-        </div>
-    </div>
-
-    <div id="screen-multiplayer" class="screen">
-        <h1>Online Mode</h1>
+    peer.on('open', () => {
+        const targetPeerId = 'NEONTIC-' + inputCode;
+        conn = peer.connect(targetPeerId, { reliable: true });
         
-        <div class="multiplayer-box">
-            <h2 style="color: #00f3ff;">Buat Ruangan (Host)</h2>
-            <button class="btn-blue" onclick="hostRoom()">Generate Kode</button>
-            <div id="room-code-display"></div>
-        </div>
-
-        <div class="multiplayer-box">
-            <h2 style="color: #ff00ff;">Gabung Ruangan (Join)</h2>
-            <input type="text" id="join-code-input" placeholder="KODE RUANGAN" maxlength="5">
-            <button class="btn-pink" onclick="joinRoom()">Gabung</button>
-        </div>
-
-        <div id="mp-status" class="connection-status"></div>
-
-        <div class="btn-group">
-            <button onclick="goToMainMenu()">Kembali</button>
-        </div>
-    </div>
-
-    <div id="screen-draw" class="screen">
-        <h1>Gambar Karaktermu</h1>
-        <div class="canvas-container">
-            <div class="canvas-box">
-                <h2 style="color: #00f3ff;">Pemain 1 (Biru)</h2>
-                <canvas id="canvas1" width="120" height="120"></canvas>
-                <button class="clear-btn" onclick="clearCanvas(1)">Hapus</button>
-            </div>
-            <div class="canvas-box">
-                <h2 style="color: #ff00ff;">Pemain 2 (Pink)</h2>
-                <canvas id="canvas2" width="120" height="120"></canvas>
-                <button class="clear-btn" onclick="clearCanvas(2)">Hapus</button>
-            </div>
-        </div>
-        <div class="btn-group">
-            <button onclick="saveAndStartLocal()">Simpan & Mulai</button>
-            <button onclick="goToMainMenu()">Kembali</button>
-        </div>
-    </div>
-
-    <div id="screen-game" class="screen">
-        <h1>Infinite Tic-Tac-Toe</h1>
-        <div id="network-role-status" style="font-size: 0.8rem; color: #aaa; margin-bottom: 5px; display: none;"></div>
-        <div id="status" class="status-x">Giliran: Pemain 1</div>
-
-        <div class="board">
-            <div class="cell" data-index="0"></div>
-            <div class="cell" data-index="1"></div>
-            <div class="cell" data-index="2"></div>
-            <div class="cell" data-index="3"></div>
-            <div class="cell" data-index="4"></div>
-            <div class="cell" data-index="5"></div>
-            <div class="cell" data-index="6"></div>
-            <div class="cell" data-index="7"></div>
-            <div class="cell" data-index="8"></div>
-        </div>
-
-        <div class="btn-group">
-            <button id="restartBtn">Main Lagi</button>
-            <button onclick="disconnectAndGoHome()">Keluar</button>
-        </div>
-    </div>
-
-    <script>
-        // --- VARIABEL GLOBAL ---
-        const screenMenu = document.getElementById('screen-menu');
-        const screenDraw = document.getElementById('screen-draw');
-        const screenMultiplayer = document.getElementById('screen-multiplayer');
-        const screenGame = document.getElementById('screen-game');
-        
-        let isOnlineMultiplayer = false;
-        let myNetworkRole = null; 
-        let peer = null;
-        let conn = null;
-
-        let customSymbol1 = null;
-        let customSymbol2 = null;
-
-        const cells = document.querySelectorAll('.cell');
-        const statusText = document.getElementById('status');
-        const restartBtn = document.getElementById('restartBtn');
-        const boardElement = document.querySelector('.board');
-        const mpStatus = document.getElementById('mp-status');
-        const roleStatus = document.getElementById('network-role-status');
-
-        let board = ["", "", "", "", "", "", "", "", ""];
-        let currentPlayer = "X";
-        let isGameRunning = false;
-        let movesX = [];
-        let movesO = [];
-
-        const winConditions = [
-            [0, 1, 2], [3, 4, 5], [6, 7, 8],
-            [0, 3, 6], [1, 4, 7], [2, 5, 8],
-            [0, 4, 8], [2, 4, 6]            
-        ];
-
-        // KONFIGURASI STUN SERVER GOOGLE (Penting untuk koneksi Peer to Peer di HP)
-        const peerConfig = {
-            config: {
-                'iceServers': [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        };
-
-        // --- NAVIGASI LAYAR ---
-        function showScreen(screen) {
-            screenMenu.classList.remove('active');
-            screenDraw.classList.remove('active');
-            screenMultiplayer.classList.remove('active');
-            screenGame.classList.remove('active');
-            screen.classList.add('active');
-        }
-
-        function goToMainMenu() { 
-            cleanupNetwork();
-            showScreen(screenMenu); 
-        }
-        function goToDrawMenu() { showScreen(screenDraw); }
-        function goToMultiplayerMenu() { 
-            mpStatus.textContent = "";
-            document.getElementById('room-code-display').style.display = 'none';
-            showScreen(screenMultiplayer); 
-        }
-
-        function startLocalStandard() {
-            customSymbol1 = null; customSymbol2 = null;
-            clearCanvas(1); clearCanvas(2);
-            isOnlineMultiplayer = false;
-            myNetworkRole = null;
-            roleStatus.style.display = 'none';
-            showScreen(screenGame);
-            resetBoard();
-        }
-
-        function saveAndStartLocal() {
-            const c1 = document.getElementById('canvas1');
-            const c2 = document.getElementById('canvas2');
-            customSymbol1 = isCanvasEmpty(c1) ? null : c1.toDataURL();
-            customSymbol2 = isCanvasEmpty(c2) ? null : c2.toDataURL();
-            isOnlineMultiplayer = false;
-            myNetworkRole = null;
-            roleStatus.style.display = 'none';
-            showScreen(screenGame);
-            resetBoard();
-        }
-
-        function disconnectAndGoHome() {
-            if(isOnlineMultiplayer && conn && conn.open) {
-                conn.send({ type: 'player_left' });
-            }
-            cleanupNetwork();
-            goToMainMenu();
-        }
-
-        // --- MULTIPLAYER LOGIC (PEERJS) ---
-        function generateRoomCode() {
-            return Math.random().toString(36).substring(2, 7).toUpperCase();
-        }
-
-        function cleanupNetwork() {
-            if(conn) { conn.close(); conn = null; }
-            if(peer) { peer.destroy(); peer = null; }
-            isOnlineMultiplayer = false;
-        }
-
-        function hostRoom() {
-            cleanupNetwork();
-            const rawCode = generateRoomCode();
-            const fullPeerId = 'NEONTIC-' + rawCode;
-            
-            mpStatus.textContent = "Menyiapkan ruangan...";
-            peer = new Peer(fullPeerId, peerConfig);
-
-            peer.on('open', (id) => {
-                const displayCode = document.getElementById('room-code-display');
-                displayCode.textContent = rawCode;
-                displayCode.style.display = 'block';
-                mpStatus.textContent = "Menunggu lawan bergabung...";
-            });
-
-            peer.on('connection', (connection) => {
-                if (conn) {
-                    connection.close(); // Tolak koneksi baru jika room sudah penuh
-                    return;
-                }
-                
-                conn = connection;
-                myNetworkRole = 'X';
-                
-                // Pastikan koneksi benar-benar terbuka sebelum mulai
-                conn.on('open', () => {
-                    setupConnectionData();
-                    mpStatus.textContent = "Lawan terhubung! Memulai permainan...";
-                    setTimeout(() => startGameOnline(), 500); 
-                });
-            });
-
-            peer.on('error', (err) => {
-                mpStatus.textContent = "Error: Terjadi kesalahan jaringan.";
-            });
-        }
-
-        function joinRoom() {
-            const inputCode = document.getElementById('join-code-input').value.toUpperCase().trim();
-            if(inputCode.length !== 5) {
-                mpStatus.textContent = "Kode ruangan harus 5 karakter!";
-                return;
-            }
-
-            cleanupNetwork();
-            mpStatus.textContent = "Menghubungkan ke Host...";
-            peer = new Peer(peerConfig); 
-
-            peer.on('open', () => {
-                const targetPeerId = 'NEONTIC-' + inputCode;
-                conn = peer.connect(targetPeerId, { reliable: true });
-                
-                conn.on('open', () => {
-                    myNetworkRole = 'O';
-                    setupConnectionData();
-                    mpStatus.textContent = "Berhasil Terhubung! Memulai...";
-                    setTimeout(() => startGameOnline(), 500);
-                });
-
-                conn.on('error', (err) => mpStatus.textContent = "Koneksi terputus.");
-            });
-
-            peer.on('error', (err) => {
-                mpStatus.textContent = "Gagal terhubung. Pastikan kode host benar.";
-            });
-        }
-
-        function setupConnectionData() {
-            conn.on('data', (data) => {
-                if (data.type === 'move') {
-                    processMove(data.index, data.player);
-                } else if (data.type === 'restart') {
-                    resetBoard(false); // Reset tapi jangan kirim sinyal balik
-                } else if (data.type === 'player_left') {
-                    alert("Lawan meninggalkan ruangan.");
-                    disconnectAndGoHome();
-                }
-            });
-
-            conn.on('close', () => {
-                if (isOnlineMultiplayer) {
-                    alert("Koneksi terputus.");
-                    disconnectAndGoHome();
-                }
-            });
-        }
-
-        function startGameOnline() {
-            customSymbol1 = null; customSymbol2 = null; 
-            isOnlineMultiplayer = true;
-            roleStatus.textContent = `Kamu adalah Pemain ${myNetworkRole === 'X' ? '1 (Biru)' : '2 (Pink)'}`;
-            roleStatus.style.display = 'block';
-            showScreen(screenGame);
-            resetBoard(false);
-        }
-
-        // --- LOGIKA GAME ---
-        cells.forEach(cell => cell.addEventListener('click', function() {
-            const cellIndex = parseInt(this.getAttribute('data-index'));
-            
-            if (board[cellIndex] !== "" || !isGameRunning) return;
-            
-            if (isOnlineMultiplayer && currentPlayer !== myNetworkRole) {
-                return; // Blokir klik jika bukan giliranmu
-            }
-
-            processMove(cellIndex, currentPlayer);
-
-            if (isOnlineMultiplayer && conn && conn.open) {
-                conn.send({ type: 'move', index: cellIndex, player: myNetworkRole });
-            }
-        }));
-
-        restartBtn.addEventListener('click', () => {
-            resetBoard(true);
+        conn.on('open', () => {
+            myNetworkRole = 'O';
+            setupConnectionData();
+            mpStatus.textContent = "Berhasil Terhubung! Memulai...";
+            setTimeout(() => startGameOnline(), 500);
         });
 
-        function processMove(index, playerNum) {
-            const cell = document.querySelector(`.cell[data-index="${index}"]`);
-            board[index] = playerNum;
-            
-            if (playerNum === "X") {
-                cell.innerHTML = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
-                cell.classList.add('x');
-            } else {
-                cell.innerHTML = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
-                cell.classList.add('o');
-            }
+        conn.on('error', (err) => mpStatus.textContent = "Koneksi terputus.");
+    });
 
-            let currentMoves = (playerNum === "X") ? movesX : movesO;
-            currentMoves.push(index);
+    peer.on('error', (err) => {
+        mpStatus.textContent = "Gagal terhubung. Pastikan kode host benar.";
+        console.error(err);
+    });
+}
 
-            if (currentMoves.length > 3) {
-                let oldestMoveIndex = currentMoves.shift(); 
-                board[oldestMoveIndex] = ""; 
-                let oldestCell = document.querySelector(`.cell[data-index="${oldestMoveIndex}"]`);
-                oldestCell.innerHTML = "";
-                oldestCell.classList.remove('x', 'o', 'warning');
-            }
-
-            updateWarnings();
-            checkWinner();
+function setupConnectionData() {
+    conn.on('data', (data) => {
+        if (data.type === 'move') {
+            processMove(data.index, data.player);
+        } else if (data.type === 'restart') {
+            resetBoard(false);
+        } else if (data.type === 'player_left') {
+            alert("Lawan meninggalkan ruangan.");
+            disconnectAndGoHome();
         }
+    });
 
-        function updateWarnings() {
-            cells.forEach(c => c.classList.remove('warning'));
-            if (movesX.length === 3) {
-                let oldestX = document.querySelector(`.cell[data-index="${movesX[0]}"]`);
-                if(oldestX) oldestX.classList.add('warning');
-            }
-            if (movesO.length === 3) {
-                let oldestO = document.querySelector(`.cell[data-index="${movesO[0]}"]`);
-                if(oldestO) oldestO.classList.add('warning');
-            }
+    conn.on('close', () => {
+        if (isOnlineMultiplayer) {
+            alert("Koneksi terputus tiba-tiba.");
+            disconnectAndGoHome();
         }
+    });
+}
 
-        function changePlayer() {
-            currentPlayer = (currentPlayer === "X") ? "O" : "X";
-            updateStatusText();
+function startGameOnline() {
+    customSymbol1 = null; customSymbol2 = null; 
+    isOnlineMultiplayer = true;
+    roleStatus.textContent = `Kamu adalah Pemain ${myNetworkRole === 'X' ? '1 (Biru)' : '2 (Pink)'}`;
+    roleStatus.style.display = 'block';
+    showScreen(screenGame);
+    resetBoard(false);
+}
+
+// --- LOGIKA GAME ---
+cells.forEach(cell => cell.addEventListener('click', function() {
+    const cellIndex = parseInt(this.getAttribute('data-index'));
+    
+    if (board[cellIndex] !== "" || !isGameRunning) return;
+    
+    if (isOnlineMultiplayer && currentPlayer !== myNetworkRole) {
+        return; // Bukan giliranmu
+    }
+
+    processMove(cellIndex, currentPlayer);
+
+    if (isOnlineMultiplayer && conn && conn.open) {
+        conn.send({ type: 'move', index: cellIndex, player: myNetworkRole });
+    }
+}));
+
+restartBtn.addEventListener('click', () => {
+    resetBoard(true);
+});
+
+function processMove(index, playerNum) {
+    const cell = document.querySelector(`.cell[data-index="${index}"]`);
+    board[index] = playerNum;
+    
+    if (playerNum === "X") {
+        cell.innerHTML = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
+        cell.classList.add('x');
+    } else {
+        cell.innerHTML = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
+        cell.classList.add('o');
+    }
+
+    let currentMoves = (playerNum === "X") ? movesX : movesO;
+    currentMoves.push(index);
+
+    if (currentMoves.length > 3) {
+        let oldestMoveIndex = currentMoves.shift(); 
+        board[oldestMoveIndex] = ""; 
+        let oldestCell = document.querySelector(`.cell[data-index="${oldestMoveIndex}"]`);
+        oldestCell.innerHTML = "";
+        oldestCell.classList.remove('x', 'o', 'warning');
+    }
+
+    updateWarnings();
+    checkWinner();
+}
+
+function updateWarnings() {
+    cells.forEach(c => c.classList.remove('warning'));
+    if (movesX.length === 3) {
+        let oldestX = document.querySelector(`.cell[data-index="${movesX[0]}"]`);
+        if(oldestX) oldestX.classList.add('warning');
+    }
+    if (movesO.length === 3) {
+        let oldestO = document.querySelector(`.cell[data-index="${movesO[0]}"]`);
+        if(oldestO) oldestO.classList.add('warning');
+    }
+}
+
+function changePlayer() {
+    currentPlayer = (currentPlayer === "X") ? "O" : "X";
+    updateStatusText();
+}
+
+function updateStatusText() {
+    let symbolDisplay = "";
+    if (currentPlayer === "X") {
+        symbolDisplay = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
+    } else {
+        symbolDisplay = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
+    }
+    
+    let extraText = "";
+    if (isOnlineMultiplayer) {
+        extraText = (currentPlayer === myNetworkRole) ? " - Giliranmu!" : " - Menunggu Lawan...";
+    }
+
+    statusText.innerHTML = `Giliran: ${symbolDisplay}${extraText}`;
+    statusText.className = (currentPlayer === "X") ? 'status-x' : 'status-o';
+}
+
+function checkWinner() {
+    let roundWon = false;
+    for (let i = 0; i < winConditions.length; i++) {
+        const [a, b, c] = winConditions[i];
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+            roundWon = true; break;
         }
+    }
 
-        function updateStatusText() {
-            let symbolDisplay = "";
-            if (currentPlayer === "X") {
-                symbolDisplay = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
-            } else {
-                symbolDisplay = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
-            }
-            
-            // Indikator giliran yang jelas untuk mode online
-            let extraText = "";
-            if (isOnlineMultiplayer) {
-                extraText = (currentPlayer === myNetworkRole) ? " - Giliranmu!" : " - Menunggu Lawan...";
-            }
+    if (roundWon) {
+        let winnerSymbol = "";
+        if (currentPlayer === "X") winnerSymbol = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
+        else winnerSymbol = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
 
-            statusText.innerHTML = `Giliran: ${symbolDisplay}${extraText}`;
-            statusText.className = (currentPlayer === "X") ? 'status-x' : 'status-o';
-        }
+        let winMsg = isOnlineMultiplayer 
+            ? (currentPlayer === myNetworkRole ? `🎉 KAMU MENANG! 🎉` : `😭 LAWAN MENANG 😭`)
+            : `🎉 ${winnerSymbol} MENANG! 🎉`;
 
-        function checkWinner() {
-            let roundWon = false;
-            for (let i = 0; i < winConditions.length; i++) {
-                const [a, b, c] = winConditions[i];
-                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-                    roundWon = true; break;
-                }
-            }
+        statusText.innerHTML = winMsg;
+        statusText.classList.add('win-text');
+        boardElement.classList.add(`win-${currentPlayer.toLowerCase()}`);
+        
+        cells.forEach(c => c.classList.remove('warning'));
+        isGameRunning = false;
+    } else {
+        changePlayer();
+    }
+}
 
-            if (roundWon) {
-                let winnerSymbol = "";
-                if (currentPlayer === "X") winnerSymbol = customSymbol1 ? `<img src="${customSymbol1}">` : "X";
-                else winnerSymbol = customSymbol2 ? `<img src="${customSymbol2}">` : "O";
+function resetBoard(broadcast = false) {
+    if (broadcast && isOnlineMultiplayer && conn && conn.open) {
+        conn.send({ type: 'restart' });
+    }
 
-                let winMsg = isOnlineMultiplayer 
-                    ? (currentPlayer === myNetworkRole ? `🎉 KAMU MENANG! 🎉` : `😭 LAWAN MENANG 😭`)
-                    : `🎉 ${winnerSymbol} MENANG! 🎉`;
+    currentPlayer = "X";
+    board = ["", "", "", "", "", "", "", "", ""];
+    movesX = []; movesO = [];
+    
+    boardElement.classList.remove('win-x', 'win-o');
+    statusText.classList.remove('win-text');
+    
+    cells.forEach(cell => {
+        cell.innerHTML = "";
+        cell.classList.remove('x', 'o', 'warning');
+    });
+    
+    updateStatusText();
+    
+    // Memberikan sedikit jeda sebelum game bisa diklik lagi agar sync MP lancar
+    setTimeout(() => {
+        isGameRunning = true;
+    }, 100);
+}
 
-                statusText.innerHTML = winMsg;
-                statusText.classList.add('win-text');
-                boardElement.classList.add(`win-${currentPlayer.toLowerCase()}`);
-                
-                cells.forEach(c => c.classList.remove('warning'));
-                isGameRunning = false;
-            } else {
-                changePlayer();
-            }
-        }
+// --- LOGIKA MENGGAMBAR DI CANVAS ---
+function setupCanvas(canvasId, color) {
+    const canvas = document.getElementById(canvasId);
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = color;
 
-        function resetBoard(broadcast = false) {
-            if (broadcast && isOnlineMultiplayer && conn && conn.open) {
-                conn.send({ type: 'restart' });
-            }
+    function getCoordinates(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) };
+    }
+    function startPosition(e) { e.preventDefault(); isDrawing = true; draw(e); }
+    function endPosition(e) { if(e && e.cancelable) e.preventDefault(); isDrawing = false; ctx.beginPath(); }
+    function draw(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        const pos = getCoordinates(e);
+        ctx.lineTo(pos.x, pos.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+    }
+    canvas.addEventListener('mousedown', startPosition); canvas.addEventListener('mouseup', endPosition);
+    canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseleave', endPosition);
+    canvas.addEventListener('touchstart', startPosition, { passive: false });
+    canvas.addEventListener('touchend', endPosition, { passive: false });
+    canvas.addEventListener('touchmove', draw, { passive: false });
+}
+setupCanvas('canvas1', '#00f3ff');
+setupCanvas('canvas2', '#ff00ff');
 
-            currentPlayer = "X";
-            board = ["", "", "", "", "", "", "", "", ""];
-            movesX = []; movesO = [];
-            
-            boardElement.classList.remove('win-x', 'win-o');
-            statusText.classList.remove('win-text');
-            
-            cells.forEach(cell => {
-                cell.innerHTML = "";
-                cell.classList.remove('x', 'o', 'warning');
-            });
-            
-            updateStatusText();
-            isGameRunning = true;
-        }
-
-        // --- LOGIKA MENGGAMBAR DI CANVAS ---
-        function setupCanvas(canvasId, color) {
-            const canvas = document.getElementById(canvasId);
-            const ctx = canvas.getContext('2d');
-            let isDrawing = false;
-            ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = color;
-
-            function getCoordinates(e) {
-                const rect = canvas.getBoundingClientRect();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) };
-            }
-            function startPosition(e) { e.preventDefault(); isDrawing = true; draw(e); }
-            function endPosition(e) { if(e && e.cancelable) e.preventDefault(); isDrawing = false; ctx.beginPath(); }
-            function draw(e) {
-                if (!isDrawing) return;
-                e.preventDefault();
-                const pos = getCoordinates(e);
-                ctx.lineTo(pos.x, pos.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
-            }
-            canvas.addEventListener('mousedown', startPosition); canvas.addEventListener('mouseup', endPosition);
-            canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseleave', endPosition);
-            canvas.addEventListener('touchstart', startPosition, { passive: false });
-            canvas.addEventListener('touchend', endPosition, { passive: false });
-            canvas.addEventListener('touchmove', draw, { passive: false });
-        }
-        setupCanvas('canvas1', '#00f3ff');
-        setupCanvas('canvas2', '#ff00ff');
-
-        function clearCanvas(playerNum) {
-            const canvas = document.getElementById(`canvas${playerNum}`);
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-        function isCanvasEmpty(canvas) {
-            const ctx = canvas.getContext('2d');
-            return !new Uint32Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer).some(color => color !== 0);
-        }
-    </script>
-</body>
-</html>
+function clearCanvas(playerNum) {
+    const canvas = document.getElementById(`canvas${playerNum}`);
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+function isCanvasEmpty(canvas) {
+    const ctx = canvas.getContext('2d');
+    return !new Uint32Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer).some(color => color !== 0);
+}
